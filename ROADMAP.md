@@ -5,6 +5,7 @@ Các topic:
 - Loop/graph engineering
 - Hermes agent
 - Advance: Cách eval/benchmark performance hiệu quả, cách chống prompt, injection
+- Prompt caching
 Lib: genkit, claude sdk
 
 ---------------------------------------------------------------------------------------

@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+.DS_Store
+
+# wayland-assistant project data + frontend
+projects/wayland-assistant/data/
+projects/wayland-assistant/frontend/node_modules/
+projects/wayland-assistant/frontend/dist/
