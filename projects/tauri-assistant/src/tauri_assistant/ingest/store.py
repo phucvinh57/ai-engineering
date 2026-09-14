@@ -48,7 +48,10 @@ class ChromaStore:
         results = self.vectorstore.similarity_search_by_vector_with_relevance_scores(
             query_embedding, k=top_k, filter=where
         )
-        return [{"text": doc.page_content, "metadata": doc.metadata, "distance": distance} for doc, distance in results]
+        return [
+            {"text": doc.page_content, "metadata": doc.metadata, "distance": distance}
+            for doc, distance in results
+        ]
 
     def count(self) -> int:
         return self._collection.count()

@@ -8,7 +8,8 @@ app = typer.Typer(help="Tauri app framework RAG assistant.")
 @app.command()
 def fetch(
     tier: int = typer.Option(
-        1, help="1 = guide docs + JS API + plugin permissions; 2 = adds the Rust API (docs.rs) crawl"
+        1,
+        help="1 = guide docs + JS API + plugin permissions; 2 = adds the Rust API (docs.rs) crawl",
     ),
 ) -> None:
     """Clone doc/API/plugin repos and fetch Rust API pages for the given tier."""
@@ -23,7 +24,9 @@ def fetch(
 
 
 @app.command()
-def ingest(tier: int = typer.Option(1, help="Tier to ingest; run `fetch` for this tier first.")) -> None:
+def ingest(
+    tier: int = typer.Option(1, help="Tier to ingest; run `fetch` for this tier first."),
+) -> None:
     """Chunk, embed, and store all fetched sources for the given tier."""
     from tauri_assistant.ingest.pipeline import run_ingest
 

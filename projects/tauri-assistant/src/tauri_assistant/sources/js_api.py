@@ -23,7 +23,9 @@ DECL_RE = re.compile(
     r"(?P<kind>async function|function|abstract class|class|interface|const enum|enum|type|const|let|var)\s+"
     r"(?P<name>[A-Za-z_$][\w$]*)"
 )
-BOTTOM_EXPORT_RE = re.compile(r"^export\s+(?:type\s+)?\{([^}]*)\}(\s*from\s+['\"][^'\"]+['\"])?", re.MULTILINE)
+BOTTOM_EXPORT_RE = re.compile(
+    r"^export\s+(?:type\s+)?\{([^}]*)\}(\s*from\s+['\"][^'\"]+['\"])?", re.MULTILINE
+)
 DOC_LINE_RE = re.compile(r"^\s*\*\s?")
 
 
@@ -99,7 +101,5 @@ def parse_api_file(path: Path, src_dir: Path) -> list[JsApiSymbol]:
 def list_api_files(tauri_repo_dir: Path) -> list[Path]:
     src_dir = tauri_repo_dir / API_SRC_SUBDIR
     return sorted(
-        p
-        for p in src_dir.rglob("*.ts")
-        if p.name not in SKIP_FILES and not p.name.endswith(".test.ts")
+        p for p in src_dir.rglob("*.ts") if p.name not in SKIP_FILES and not p.name.endswith(".test.ts")
     )

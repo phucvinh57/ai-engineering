@@ -40,9 +40,7 @@ def count_tokens(text: str) -> int:
     return len(_ENCODING.encode(text))
 
 
-def _split_paragraphs_by_tokens(
-    paragraphs: list[str], max_tokens: int, overlap_tokens: int
-) -> list[str]:
+def _split_paragraphs_by_tokens(paragraphs: list[str], max_tokens: int, overlap_tokens: int) -> list[str]:
     """Greedily pack paragraphs into windows <= max_tokens, with token overlap."""
     windows: list[str] = []
     current: list[str] = []

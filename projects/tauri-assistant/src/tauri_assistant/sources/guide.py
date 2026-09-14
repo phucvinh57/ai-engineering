@@ -15,7 +15,7 @@ CONTENT_SUBDIR = "src/content/docs"
 LOCALE_DIRS = {"de", "es", "fr", "ja", "zh-cn"}
 
 FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
-FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*(.+)$', re.MULTILINE)
+FRONTMATTER_TITLE_RE = re.compile(r"^title:\s*(.+)$", re.MULTILINE)
 IMPORT_RE = re.compile(r"^import .*$\n?", re.MULTILINE)
 JSX_TAG_RE = re.compile(r"</?[A-Z][A-Za-z0-9.]*(?:\s[^>]*)?/?>")
 
