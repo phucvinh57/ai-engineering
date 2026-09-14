@@ -7,11 +7,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", extra="ignore")
 
-    openai_api_key: str = ""
-    chat_model: str = "gpt-4o"
-    embedding_model: str = "text-embedding-3-small"
+    chat_base_url: str = "http://localhost:11434/v1"
+    chat_api_key: str = "ollama"
+    chat_model: str = "llama3.2"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     data_dir: Path = PROJECT_ROOT / "data"
     repos_dir: Path = PROJECT_ROOT / "data" / "repos"

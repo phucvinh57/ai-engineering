@@ -51,6 +51,8 @@ def chat(request: ChatRequest) -> StreamingResponse:
                     for s in (event.sources or [])
                 ]
                 yield _sse_format("sources", {"sources": sources})
+            elif event.type == "thinking":
+                yield _sse_format("thinking", {"text": event.text})
             elif event.type == "token":
                 yield _sse_format("token", {"text": event.text})
             elif event.type == "done":

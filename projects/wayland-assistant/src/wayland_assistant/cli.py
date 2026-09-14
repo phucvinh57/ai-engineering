@@ -6,7 +6,11 @@ app = typer.Typer(help="Wayland protocol & compositor RAG assistant.")
 
 
 @app.command()
-def fetch(tier: int = typer.Option(1, help="1 = core+stable+staging+wlr+book preface; 2 = adds unstable/experimental/doxygen")) -> None:
+def fetch(
+    tier: int = typer.Option(
+        1, help="1 = core+stable+staging+wlr+book preface; 2 = adds unstable/experimental/doxygen"
+    ),
+) -> None:
     """Clone protocol repos and fetch Book/Doxygen pages for the given tier."""
     from wayland_assistant.ingest.pipeline import run_fetch
 

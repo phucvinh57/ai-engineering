@@ -40,11 +40,10 @@ def retrieve(
     query: str,
     settings: Settings,
     store: ChromaStore,
-    client: OpenAI | None = None,
     top_k: int | None = None,
     where: dict[str, Any] | None = None,
 ) -> list[RetrievedChunk]:
-    embedding = embed_query(query, settings, client)
+    embedding = embed_query(query, settings)
     results = store.query(embedding, top_k=top_k or settings.retrieval_top_k, where=where)
 
     seen_hashes: set[str] = set()

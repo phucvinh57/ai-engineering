@@ -21,7 +21,7 @@ from wayland_assistant.rag.retriever import (
 
 @dataclass
 class ChatEvent:
-    type: Literal["sources", "token", "done"]
+    type: Literal["sources", "thinking", "token", "done"]
     sources: list[RetrievedChunk] | None = None
     text: str | None = None
 
@@ -33,13 +33,13 @@ def stream_chat(
     client: OpenAI | None = None,
     where: dict[str, Any] | None = None,
 ) -> Iterator[ChatEvent]:
-    client = client or OpenAI(api_key=settings.openai_api_key)
+    client = client or OpenAI(base_url=settings.chat_base_url, api_key=settings.chat_api_key)
 
     *history, last = messages
     question = last["content"]
     standalone_query = condense_query(history, question, settings, client)
 
-    chunks = retrieve(standalone_query, settings, store, client, where=where)
+    chunks = retrieve(standalone_query, settings, store, where=where)
     yield ChatEvent(type="sources", sources=chunks)
 
     context = assemble_context(chunks)
@@ -52,8 +52,11 @@ def stream_chat(
         stream=True,
     )
     for event in stream:
-        delta = event.choices[0].delta.content
-        if delta:
-            yield ChatEvent(type="token", text=delta)
+        delta = event.choices[0].delta
+        reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+        if reasoning:
+            yield ChatEvent(type="thinking", text=reasoning)
+        if delta.content:
+            yield ChatEvent(type="token", text=delta.content)
 
     yield ChatEvent(type="done")

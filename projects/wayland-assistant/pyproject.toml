@@ -17,6 +17,7 @@ dependencies = [
     "lxml>=5.3",
     "markdownify>=0.13",
     "tiktoken>=0.8",
+    "sentence-transformers>=3.2",
     "pydantic-settings>=2.6",
     "tenacity>=9.0",
     "typer>=0.13",

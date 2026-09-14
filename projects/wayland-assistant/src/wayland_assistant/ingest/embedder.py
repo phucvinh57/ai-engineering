@@ -1,33 +1,26 @@
-"""Batched OpenAI embeddings for chunk text."""
+"""Batched local embeddings for chunk text, via sentence-transformers."""
 
 from __future__ import annotations
 
-import tenacity
-from openai import OpenAI
+from functools import lru_cache
+
+from sentence_transformers import SentenceTransformer
 
 from wayland_assistant.config import Settings
 
-BATCH_SIZE = 100
+BATCH_SIZE = 64
 
 
-@tenacity.retry(
-    wait=tenacity.wait_exponential(multiplier=1, min=2, max=30),
-    stop=tenacity.stop_after_attempt(5),
-)
-def _embed_batch(client: OpenAI, model: str, batch: list[str]) -> list[list[float]]:
-    resp = client.embeddings.create(model=model, input=batch)
-    return [item.embedding for item in resp.data]
+@lru_cache(maxsize=4)
+def _load_model(model_name: str) -> SentenceTransformer:
+    return SentenceTransformer(model_name)
 
 
-def embed_texts(texts: list[str], settings: Settings, client: OpenAI | None = None) -> list[list[float]]:
-    client = client or OpenAI(api_key=settings.openai_api_key)
-    embeddings: list[list[float]] = []
-    for i in range(0, len(texts), BATCH_SIZE):
-        batch = texts[i : i + BATCH_SIZE]
-        embeddings.extend(_embed_batch(client, settings.embedding_model, batch))
-    return embeddings
+def embed_texts(texts: list[str], settings: Settings) -> list[list[float]]:
+    model = _load_model(settings.embedding_model)
+    embeddings = model.encode(texts, batch_size=BATCH_SIZE, show_progress_bar=False, convert_to_numpy=True)
+    return embeddings.tolist()
 
 
-def embed_query(text: str, settings: Settings, client: OpenAI | None = None) -> list[float]:
-    client = client or OpenAI(api_key=settings.openai_api_key)
-    return _embed_batch(client, settings.embedding_model, [text])[0]
+def embed_query(text: str, settings: Settings) -> list[float]:
+    return embed_texts([text], settings)[0]

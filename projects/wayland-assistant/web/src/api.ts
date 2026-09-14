@@ -20,6 +20,7 @@ export interface SearchResult {
 
 type ChatCallbacks = {
   onSources: (sources: SourceRef[]) => void;
+  onThinking: (text: string) => void;
   onToken: (text: string) => void;
   onDone: () => void;
   onError: (message: string) => void;
@@ -62,6 +63,7 @@ export async function streamChat(messages: ChatMessage[], callbacks: ChatCallbac
       const parsed = JSON.parse(data);
 
       if (eventName === "sources") callbacks.onSources(parsed.sources ?? []);
+      else if (eventName === "thinking") callbacks.onThinking(parsed.text ?? "");
       else if (eventName === "token") callbacks.onToken(parsed.text ?? "");
       else if (eventName === "done") callbacks.onDone();
     }
