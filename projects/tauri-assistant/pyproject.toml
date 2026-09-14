@@ -25,6 +25,7 @@ dependencies = [
     "langchain-core>=1.6.3",
     "langchain-chroma>=1.1.0",
     "langchain-huggingface>=1.2.2",
+    "langfuse>=3.0,<4",
 ]
 
 [project.scripts]
@@ -35,6 +36,10 @@ dev = [
     "ruff>=0.7",
     "pytest>=8.3",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
 
 [build-system]
 requires = ["uv_build>=0.12.0,<0.13.0"]

@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
-import { streamChat, type ChatMessage, type SourceRef } from "../api";
+import { sendFeedback, streamChat, type ChatMessage, type SourceRef } from "../api";
+import { resetSession } from "../session";
 
 interface DisplayMessage extends ChatMessage {
   sources?: SourceRef[];
   thinking?: string;
   thinkingDone?: boolean;
+  traceId?: string;
+  feedback?: 0 | 1 | null;
 }
 
 function ThinkingBlock({ text, done }: { text: string; done: boolean }) {
@@ -31,10 +34,53 @@ function ThinkingBlock({ text, done }: { text: string; done: boolean }) {
   );
 }
 
+function FeedbackBar({ message, onRate }: { message: DisplayMessage; onRate: (value: 0 | 1) => void }) {
+  if (!message.traceId) return null;
+  return (
+    <div className="feedback">
+      <button
+        type="button"
+        aria-label="Helpful"
+        aria-pressed={message.feedback === 1}
+        className={message.feedback === 1 ? "active" : ""}
+        onClick={() => onRate(1)}
+      >
+        👍
+      </button>
+      <button
+        type="button"
+        aria-label="Not helpful"
+        aria-pressed={message.feedback === 0}
+        className={message.feedback === 0 ? "active" : ""}
+        onClick={() => onRate(0)}
+      >
+        👎
+      </button>
+    </div>
+  );
+}
+
 export default function Chat() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // A page reload keeps sessionStorage's session id while this component
+    // remounts with no messages, which would otherwise let one Langfuse
+    // session span two unrelated conversations.
+    if (messages.length === 0) resetSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Rebuilds only the last element instead of the whole array, so per-message
+  // state (traceId, feedback) set after streaming ends isn't clobbered by a
+  // later render, and so we're not reallocating the full history on every token.
+  function patchLast(patch: Partial<DisplayMessage>) {
+    setMessages((prev) =>
+      prev.map((m, i) => (i === prev.length - 1 ? { ...m, ...patch } : m))
+    );
+  }
 
   async function send() {
     const question = input.trim();
@@ -47,60 +93,46 @@ export default function Chat() {
 
     let assistantText = "";
     let assistantThinking = "";
-    let assistantSources: SourceRef[] = [];
     setMessages([...history, { role: "assistant", content: "" }]);
 
     try {
       await streamChat(history, {
-        onSources: (sources) => {
-          assistantSources = sources;
-          setMessages([
-            ...history,
-            {
-              role: "assistant",
-              content: assistantText,
-              sources: assistantSources,
-              thinking: assistantThinking,
-              thinkingDone: false,
-            },
-          ]);
-        },
+        onStart: ({ traceId }) => patchLast({ traceId }),
+        onSources: (sources) => patchLast({ sources }),
         onThinking: (text) => {
           assistantThinking += text;
-          setMessages([
-            ...history,
-            {
-              role: "assistant",
-              content: assistantText,
-              sources: assistantSources,
-              thinking: assistantThinking,
-              thinkingDone: false,
-            },
-          ]);
+          patchLast({ thinking: assistantThinking, thinkingDone: false });
         },
         onToken: (text) => {
           assistantText += text;
-          setMessages([
-            ...history,
-            {
-              role: "assistant",
-              content: assistantText,
-              sources: assistantSources,
-              thinking: assistantThinking,
-              thinkingDone: true,
-            },
-          ]);
+          patchLast({ content: assistantText, thinkingDone: true });
         },
-        onDone: () => setBusy(false),
+        onDone: ({ traceId }) => {
+          patchLast({ traceId, feedback: null });
+          setBusy(false);
+        },
         onError: (message) => {
-          assistantText = `Error: ${message}`;
-          setMessages([...history, { role: "assistant", content: assistantText }]);
+          patchLast({ content: `Error: ${message}` });
           setBusy(false);
         },
       });
     } catch (err) {
-      setMessages([...history, { role: "assistant", content: `Error: ${String(err)}` }]);
+      patchLast({ content: `Error: ${String(err)}` });
       setBusy(false);
+    }
+  }
+
+  async function rate(index: number, value: 0 | 1) {
+    const target = messages[index];
+    if (!target?.traceId || target.feedback === value) return;
+
+    const previous = target.feedback ?? null;
+    setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, feedback: value } : m)));
+
+    const comment = value === 0 ? (window.prompt("What went wrong? (optional)") ?? undefined) : undefined;
+    const ok = await sendFeedback(target.traceId, value, comment);
+    if (!ok) {
+      setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, feedback: previous } : m)));
     }
   }
 
@@ -131,6 +163,7 @@ export default function Chat() {
                 ))}
               </div>
             )}
+            {m.role === "assistant" && <FeedbackBar message={m} onRate={(value) => rate(i, value)} />}
           </div>
         ))}
       </div>

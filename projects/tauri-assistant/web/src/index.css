@@ -225,6 +225,32 @@ main {
   text-decoration: none;
 }
 
+.feedback {
+  margin-top: 0.6rem;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.feedback button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.feedback button:hover {
+  opacity: 1;
+}
+
+.feedback button.active {
+  opacity: 1;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
 .composer {
   display: flex;
   gap: 0.5rem;

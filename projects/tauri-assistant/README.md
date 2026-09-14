@@ -54,6 +54,31 @@ npm run dev
 
 The Vite dev server proxies `/api` to `localhost:8000`.
 
+Run the test suite:
+
+```bash
+uv run --package tauri-assistant pytest projects/tauri-assistant/tests
+```
+
+## Telemetry (optional)
+
+`/api/chat` and `/api/search` can trace every real query -- condensed
+question, retrieved chunks + scores, the generated answer, latency, and
+user thumbs up/down -- to [Langfuse](https://langfuse.com), turning live
+traffic into evaluation data (see [Evaluation](#evaluation) below). It's
+fully optional: with no keys configured, telemetry is a complete no-op --
+zero warnings, zero network calls.
+
+```bash
+# From the repo root. Self-hosted (Docker; see infra/langfuse/README.md),
+# or use Langfuse Cloud instead -- see that README for the trade-off.
+docker compose -f infra/langfuse/docker-compose.yml up -d
+```
+
+Then set `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` in
+`.env` (see `.env.example`) and restart `serve`. Every assistant reply in
+the web UI gets a 👍/👎 that scores the corresponding trace.
+
 ## Architecture
 
 ```mermaid
@@ -103,9 +128,9 @@ flowchart TD
     F1 --> F2 --> F3 --> F4 --> F5
 
     subgraph Interfaces
-        G1[cli.py\nfetch / ingest / search / stats / serve]
-        G2["api/routes.py\nFastAPI: /api/chat (SSE), /search, /stats, /health"]
-        G3[web\nVite + React: Chat.tsx, Search.tsx]
+        G1[cli.py\nfetch / ingest / search / stats / eval / serve]
+        G2["api/routes.py\nFastAPI: /api/chat (SSE), /search, /feedback, /stats, /health"]
+        G3[web\nVite + React: Chat.tsx (+ 👍/👎), Search.tsx]
     end
 
     G1 -.-> B1
@@ -114,6 +139,17 @@ flowchart TD
     G2 --> F5
     G2 --> F3
     G3 --> G2
+
+    subgraph Telemetry [Telemetry -- optional]
+        H1[(Langfuse\ntraces, sessions, scores)]
+        H2["eval/harvest.py\ntraces -> GoldenItem candidates"]
+    end
+
+    F1 -.-> H1
+    F3 -.-> H1
+    F5 -.-> H1
+    G2 -. "👍/👎" .-> H1
+    H1 -. "eval harvest" .-> H2
 ```
 
 **Ingest** (`tauri-assistant fetch` / `ingest`, orchestrated by `ingest/pipeline.py`):
@@ -128,7 +164,7 @@ flowchart TD
 2. Retrieved chunks are deduplicated and assembled into numbered context blocks (`rag/prompts.py`).
 3. `rag/chat.py` streams a completion from the local LLM (via Ollama's OpenAI-compatible API) grounded in that context via `SYSTEM_PROMPT`, which enforces inline `[n]` citations, calls out required permissions/capabilities, and asks a clarifying question when the desktop/mobile target or Tauri major version is ambiguous. `search`/`/api/search` stop after step 2 (retrieval only, no LLM call).
 
-**Serving**: `api/main.py` wires CORS + `api/routes.py` (FastAPI) on top of the same `ChromaStore`/`stream_chat` used by the CLI; `/api/chat` streams via Server-Sent Events (`sources` → `token`* → `done`). The `web/` (Vite + React) `Chat.tsx` and `Search.tsx` components consume these endpoints directly.
+**Serving**: `api/main.py` wires CORS + a `lifespan` (warms the embedding model, inits/flushes telemetry) + `api/routes.py` (FastAPI) on top of the same `ChromaStore`/`stream_chat` used by the CLI; `/api/chat` streams via Server-Sent Events (`sources` → `token`* → `done`, the last carrying a trace id). The `web/` (Vite + React) `Chat.tsx` and `Search.tsx` components consume these endpoints directly; `Chat.tsx` also posts a rating to `/api/feedback` when you click 👍/👎 on a reply.
 
 ## Tiers
 
@@ -136,3 +172,25 @@ flowchart TD
   permissions schema. Covers everyday app and plugin development.
 - **Tier 2**: adds the `tauri` crate's Rust API docs (a ~200-page docs.rs
   crawl) for backend/plugin authors working in Rust.
+
+## Evaluation
+
+```bash
+# Score the hand-written golden set (retrieval hit_rate/mrr/precision@k +
+# LLM-judged faithfulness/answer_relevancy); saves a report under data/eval_runs/
+uv run --package tauri-assistant tauri-assistant eval
+
+# Pull real chat traces out of Langfuse and print pasteable GoldenItem candidates
+# (requires telemetry to be configured -- see above)
+uv run --package tauri-assistant tauri-assistant eval harvest --feedback down --days 7
+```
+
+`eval/dataset.py`'s `GOLDEN_SET` is hand-verified against the live corpus,
+so `eval harvest` never auto-appends to it -- promotion stays a human edit.
+The intended loop: harvest `--feedback down` traces (the ones a real user
+rated unhelpful), use `tauri-assistant search` to find the heading_path that
+should have won, fill in `expected_matches`, and paste the result into
+`GOLDEN_SET` as a regression case. `eval` and the live chat path share the
+same `rag/chat.py:prepare_turn` helper (condense + retrieve + prompt
+assembly), so a harvested multi-turn conversation replays exactly as it
+happened live.

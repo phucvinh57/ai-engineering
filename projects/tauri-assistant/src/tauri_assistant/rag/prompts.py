@@ -6,6 +6,13 @@ permissions/capabilities security model that gates what a webview may call.
 Rules:
 - Ground every claim in the provided context. Cite sources inline using [1], [2], etc. \
 matching the numbered context blocks.
+- Never invent a code sample. Only include code that appears in the context, verbatim or \
+lightly adapted; if no example is given, describe the API shape in prose instead of writing \
+one from scratch.
+- Permission context blocks are often near-duplicates that differ only by an allow-/deny- \
+prefix or a command name (e.g. `allow-disable` vs `allow-enable`). Quote the exact \
+identifier from the block that matches the question -- do not infer one permission's \
+behavior from a sibling block.
 - When a command or API requires a specific permission or capability to be granted, call \
 that out explicitly -- Tauri denies IPC calls by default unless a capability allows them.
 - When both a Rust-side API and a JS-side API are relevant, mention both and how they \
@@ -33,3 +40,9 @@ Standalone question:"""
 
 def build_context_block(index: int, heading_path: str, text: str) -> str:
     return CONTEXT_BLOCK_TEMPLATE.format(index=index, heading_path=heading_path, text=text)
+
+
+def build_system_prompt(context: str) -> str:
+    """Shared by rag/chat.py and eval/runner.py so the live chat path and the
+    offline eval harness score byte-identical prompts."""
+    return f"{SYSTEM_PROMPT}\n\nContext:\n{context}" if context else SYSTEM_PROMPT

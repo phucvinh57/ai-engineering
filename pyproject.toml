@@ -32,3 +32,8 @@ select = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["tauri_assistant"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's DI pattern relies on calling Depends(...)/Query(...)/etc. in
+# argument defaults; ruff's B008 otherwise flags every route handler.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
