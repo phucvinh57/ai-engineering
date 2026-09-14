@@ -8,7 +8,5 @@ __pycache__/
 .env
 .DS_Store
 
-# wayland-assistant project data + frontend
-projects/wayland-assistant/data/
-projects/wayland-assistant/frontend/node_modules/
-projects/wayland-assistant/frontend/dist/
+# tauri-assistant project data (web/ has its own .gitignore for node_modules/dist)
+projects/tauri-assistant/data/

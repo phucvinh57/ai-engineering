@@ -10,7 +10,7 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>Wayland Assistant</h1>
+        <h1>Tauri Assistant</h1>
         <nav>
           <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
             Chat

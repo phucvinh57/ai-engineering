@@ -1,31 +1,31 @@
 import typer
 
-from wayland_assistant.config import get_settings
+from tauri_assistant.config import get_settings
 
-app = typer.Typer(help="Wayland protocol & compositor RAG assistant.")
+app = typer.Typer(help="Tauri app framework RAG assistant.")
 
 
 @app.command()
 def fetch(
     tier: int = typer.Option(
-        1, help="1 = core+stable+staging+wlr+book preface; 2 = adds unstable/experimental/doxygen"
+        1, help="1 = guide docs + JS API + plugin permissions; 2 = adds the Rust API (docs.rs) crawl"
     ),
 ) -> None:
-    """Clone protocol repos and fetch Book/Doxygen pages for the given tier."""
-    from wayland_assistant.ingest.pipeline import run_fetch
+    """Clone doc/API/plugin repos and fetch Rust API pages for the given tier."""
+    from tauri_assistant.ingest.pipeline import run_fetch
 
     settings = get_settings()
     result = run_fetch(settings, tier=tier)
     typer.echo(
-        f"Fetched {result.protocol_files} protocol XML files, "
-        f"{result.book_pages} Book pages, {result.doxygen_pages} Doxygen pages."
+        f"Fetched {result.guide_pages} guide pages, {result.js_api_symbols} JS API symbols, "
+        f"{result.plugin_permissions} plugin permissions, {result.rust_api_pages} Rust API pages."
     )
 
 
 @app.command()
 def ingest(tier: int = typer.Option(1, help="Tier to ingest; run `fetch` for this tier first.")) -> None:
     """Chunk, embed, and store all fetched sources for the given tier."""
-    from wayland_assistant.ingest.pipeline import run_ingest
+    from tauri_assistant.ingest.pipeline import run_ingest
 
     settings = get_settings()
     n = run_ingest(settings, tier=tier)
@@ -35,8 +35,8 @@ def ingest(tier: int = typer.Option(1, help="Tier to ingest; run `fetch` for thi
 @app.command()
 def search(query: str, top_k: int = 8, source: str | None = None) -> None:
     """Pure retrieval, no LLM: print ranked chunks."""
-    from wayland_assistant.ingest.store import ChromaStore
-    from wayland_assistant.rag.retriever import retrieve
+    from tauri_assistant.ingest.store import ChromaStore
+    from tauri_assistant.rag.retriever import retrieve
 
     settings = get_settings()
     store = ChromaStore(settings)
@@ -53,8 +53,8 @@ def search(query: str, top_k: int = 8, source: str | None = None) -> None:
 @app.command()
 def stats() -> None:
     """Print chunk/document counts by source and last fetch time."""
-    from wayland_assistant.ingest.store import ChromaStore
-    from wayland_assistant.sources.manifest import load_manifest
+    from tauri_assistant.ingest.store import ChromaStore
+    from tauri_assistant.sources.manifest import load_manifest
 
     settings = get_settings()
     store = ChromaStore(settings)
@@ -73,7 +73,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000, reload: bool = False) -> None
     """Run the FastAPI server."""
     import uvicorn
 
-    uvicorn.run("wayland_assistant.api.main:app", host=host, port=port, reload=reload)
+    uvicorn.run("tauri_assistant.api.main:app", host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":

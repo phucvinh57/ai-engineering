@@ -31,4 +31,4 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["wayland_assistant"]
+known-first-party = ["tauri_assistant"]

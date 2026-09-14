@@ -1,9 +1,9 @@
 """Turn parsed sources into embeddable chunks.
 
-Protocol XML gets one chunk per interface (its requests/events/enums belong
-together), subdivided only when an interface is unusually large. Book/Doxygen
-markdown gets one chunk per leaf heading section, subdivided the same way.
-Every chunk carries a breadcrumb prefix so it reads standalone.
+JS API symbols and plugin permissions each get one chunk per symbol/
+permission; guide and Rust API markdown get one chunk per leaf heading
+section. Any of these gets subdivided only when it's unusually large. Every
+chunk carries a breadcrumb prefix so it reads standalone.
 """
 
 from __future__ import annotations
@@ -13,20 +13,12 @@ from dataclasses import dataclass, field
 
 import tiktoken
 
-from wayland_assistant.config import Settings
-from wayland_assistant.sources.manifest import content_hash
-from wayland_assistant.sources.protocol_xml import InterfaceDoc
+from tauri_assistant.config import Settings
+from tauri_assistant.sources.js_api import JsApiSymbol
+from tauri_assistant.sources.manifest import content_hash
+from tauri_assistant.sources.permissions import PluginPermission
 
 _ENCODING = tiktoken.get_encoding("cl100k_base")
-
-MATURITY_LABELS = {
-    "core": "wayland core protocol",
-    "stable": "wayland-protocols/stable",
-    "staging": "wayland-protocols/staging",
-    "unstable": "wayland-protocols/unstable",
-    "experimental": "wayland-protocols/experimental",
-    "wlr": "wlr-protocols/unstable",
-}
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 
@@ -35,9 +27,6 @@ HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 class Chunk:
     text: str
     source: str
-    protocol_name: str = ""
-    interface_name: str = ""
-    version: str = ""
     heading_path: str = ""
     url: str = ""
     chunk_index: int = 0
@@ -88,40 +77,33 @@ def _split_text_by_tokens(text: str, max_tokens: int, overlap_tokens: int) -> li
     return _split_paragraphs_by_tokens(paragraphs, max_tokens, overlap_tokens)
 
 
-def chunk_interface(doc: InterfaceDoc, settings: Settings) -> list[Chunk]:
-    label = MATURITY_LABELS.get(doc.maturity, doc.maturity)
-    breadcrumb = f"{label} > {doc.protocol_name} > {doc.interface_name}"
-    body = doc.render_text()
+def _chunk_body(breadcrumb: str, body: str, source: str, url: str, settings: Settings) -> list[Chunk]:
     full_text = f"{breadcrumb}\n\n{body}"
-
     if count_tokens(full_text) <= settings.chunk_max_tokens:
-        return [
-            Chunk(
-                text=full_text,
-                source=doc.maturity,
-                protocol_name=doc.protocol_name,
-                interface_name=doc.interface_name,
-                version=doc.version,
-                heading_path=breadcrumb,
-                url=doc.url,
-                chunk_index=0,
-            )
-        ]
+        return [Chunk(text=full_text, source=source, heading_path=breadcrumb, url=url, chunk_index=0)]
 
     windows = _split_text_by_tokens(body, settings.chunk_max_tokens, settings.chunk_overlap_tokens)
     return [
         Chunk(
             text=f"{breadcrumb} (part {i + 1}/{len(windows)})\n\n{window}",
-            source=doc.maturity,
-            protocol_name=doc.protocol_name,
-            interface_name=doc.interface_name,
-            version=doc.version,
+            source=source,
             heading_path=breadcrumb,
-            url=doc.url,
+            url=url,
             chunk_index=i,
         )
         for i, window in enumerate(windows)
     ]
+
+
+def chunk_js_symbol(symbol: JsApiSymbol, url: str, settings: Settings) -> list[Chunk]:
+    breadcrumb = f"@tauri-apps/api > {symbol.module} > {symbol.name}"
+    body = "\n\n".join(part for part in (symbol.doc, f"```ts\n{symbol.source}\n```") if part)
+    return _chunk_body(breadcrumb, body, "js-api", url, settings)
+
+
+def chunk_permission(perm: PluginPermission, settings: Settings) -> list[Chunk]:
+    breadcrumb = f"{perm.plugin} plugin > permissions > {perm.identifier}"
+    return _chunk_body(breadcrumb, perm.render_text(), "permissions", perm.url, settings)
 
 
 @dataclass
@@ -163,38 +145,11 @@ def chunk_markdown(
     markdown: str,
     settings: Settings,
 ) -> list[Chunk]:
-    sections = _parse_markdown_sections(markdown)
     chunks: list[Chunk] = []
-
-    for section in sections:
+    for section in _parse_markdown_sections(markdown):
         heading_path = " > ".join([root_label, *section.heading_path])
         body = "\n".join(section.body_lines).strip()
         if not body:
             continue
-        full_text = f"{heading_path}\n\n{body}"
-
-        if count_tokens(full_text) <= settings.chunk_max_tokens:
-            chunks.append(
-                Chunk(
-                    text=full_text,
-                    source=source,
-                    heading_path=heading_path,
-                    url=url,
-                    chunk_index=0,
-                )
-            )
-            continue
-
-        windows = _split_text_by_tokens(body, settings.chunk_max_tokens, settings.chunk_overlap_tokens)
-        for i, window in enumerate(windows):
-            chunks.append(
-                Chunk(
-                    text=f"{heading_path} (part {i + 1}/{len(windows)})\n\n{window}",
-                    source=source,
-                    heading_path=heading_path,
-                    url=url,
-                    chunk_index=i,
-                )
-            )
-
+        chunks.extend(_chunk_body(heading_path, body, source, url, settings))
     return chunks

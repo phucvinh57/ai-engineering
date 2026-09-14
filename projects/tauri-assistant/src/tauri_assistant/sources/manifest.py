@@ -7,7 +7,7 @@ import json
 from datetime import UTC, datetime
 from typing import NamedTuple
 
-from wayland_assistant.config import Settings
+from tauri_assistant.config import Settings
 
 
 class ManifestEntry(NamedTuple):

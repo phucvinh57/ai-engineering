@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from wayland_assistant.api.schemas import (
+from tauri_assistant.api.schemas import (
     ChatRequest,
     HealthResponse,
     SearchRequest,
@@ -13,11 +13,11 @@ from wayland_assistant.api.schemas import (
     SearchResult,
     StatsResponse,
 )
-from wayland_assistant.config import get_settings
-from wayland_assistant.ingest.store import ChromaStore
-from wayland_assistant.rag.chat import stream_chat
-from wayland_assistant.rag.retriever import retrieve
-from wayland_assistant.sources.manifest import load_manifest
+from tauri_assistant.config import get_settings
+from tauri_assistant.ingest.store import ChromaStore
+from tauri_assistant.rag.chat import stream_chat
+from tauri_assistant.rag.retriever import retrieve
+from tauri_assistant.sources.manifest import load_manifest
 
 router = APIRouter(prefix="/api")
 

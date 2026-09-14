@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from wayland_assistant.api.routes import router
-from wayland_assistant.config import get_settings
+from tauri_assistant.api.routes import router
+from tauri_assistant.config import get_settings
 
-app = FastAPI(title="Wayland Assistant API")
+app = FastAPI(title="Tauri Assistant API")
 
 settings = get_settings()
 app.add_middleware(

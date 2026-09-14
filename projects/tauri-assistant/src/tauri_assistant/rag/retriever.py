@@ -7,10 +7,10 @@ from typing import Any
 
 from openai import OpenAI
 
-from wayland_assistant.config import Settings
-from wayland_assistant.ingest.embedder import embed_query
-from wayland_assistant.ingest.store import ChromaStore
-from wayland_assistant.rag.prompts import CONDENSE_QUERY_PROMPT, build_context_block
+from tauri_assistant.config import Settings
+from tauri_assistant.ingest.embedder import embed_query
+from tauri_assistant.ingest.store import ChromaStore
+from tauri_assistant.rag.prompts import CONDENSE_QUERY_PROMPT, build_context_block
 
 
 @dataclass

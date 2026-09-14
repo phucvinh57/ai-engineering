@@ -108,7 +108,7 @@ export default function Chat() {
     <div className="panel">
       <div className="messages">
         {messages.length === 0 && (
-          <p className="hint">Ask about Wayland protocols, extensions, or wlroots compositor APIs.</p>
+          <p className="hint">Ask about the Tauri Rust/JS APIs, plugins, or the permissions system.</p>
         )}
         {messages.map((m, i) => (
           <div key={i} className={`message ${m.role}`}>
@@ -144,7 +144,7 @@ export default function Chat() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="e.g. How do I implement layer-shell in a wlroots compositor?"
+          placeholder="e.g. How do I read a file from the frontend with the fs plugin?"
           disabled={busy}
         />
         <button type="submit" disabled={busy || !input.trim()}>

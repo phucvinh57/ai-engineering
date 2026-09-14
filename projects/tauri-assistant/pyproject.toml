@@ -1,7 +1,7 @@
 [project]
-name = "wayland-assistant"
+name = "tauri-assistant"
 version = "0.1.0"
-description = "RAG chatbot over Wayland protocol & compositor documentation"
+description = "RAG chatbot over Tauri app framework documentation"
 readme = "README.md"
 authors = [
     { name = "Nguyen Phuc Vinh", email = "npvinh0507@gmail.com" }
@@ -22,10 +22,13 @@ dependencies = [
     "tenacity>=9.0",
     "typer>=0.13",
     "gitpython>=3.1",
+    "langchain-core>=1.6.3",
+    "langchain-chroma>=1.1.0",
+    "langchain-huggingface>=1.2.2",
 ]
 
 [project.scripts]
-wl-assistant = "wayland_assistant.cli:app"
+tauri-assistant = "tauri_assistant.cli:app"
 
 [dependency-groups]
 dev = [

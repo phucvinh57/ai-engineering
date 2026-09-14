@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     chroma_dir: Path = PROJECT_ROOT / "data" / "chroma"
     manifest_path: Path = PROJECT_ROOT / "data" / "manifest.jsonl"
 
-    chroma_collection: str = "wayland_docs"
+    chroma_collection: str = "tauri_docs"
 
     chunk_max_tokens: int = 800
     chunk_overlap_tokens: int = 100
