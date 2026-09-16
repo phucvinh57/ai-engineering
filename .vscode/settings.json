@@ -1,7 +1,7 @@
 {
   "ruff.enable": true,
-  "ruff.organizeImports": false,
-  "ruff.fixAll": false,
+  "ruff.organizeImports": true,
+  "ruff.fixAll": true,
   "python.analysis.ignore": [
     "**/*"
   ],

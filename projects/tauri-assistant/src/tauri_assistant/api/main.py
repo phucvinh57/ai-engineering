@@ -1,33 +1,27 @@
+from __future__ import annotations
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-import anyio
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
-from tauri_assistant import telemetry
-from tauri_assistant.api.routes import router
-from tauri_assistant.config import get_settings
-from tauri_assistant.ingest.embedder import get_embeddings
+from tauri_assistant.api.routes import routers
+from tauri_assistant.logs import configure_logger
 
-settings = get_settings()
+configure_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    telemetry.init(settings)  # first, so a failure warming up the embedding model is traced
-    await anyio.to_thread.run_sync(get_embeddings, settings.embedding_model)
+    logger.info("API docs available at http://localhost:8000/docs (ReDoc: http://localhost:8000/redoc)")
     yield
-    telemetry.shutdown()
 
 
-app = FastAPI(title="Tauri Assistant API", lifespan=lifespan)
+app = FastAPI(title="Tauri assistant", lifespan=lifespan)
+app.include_router(routers)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-app.include_router(router)
+@app.get("/health", tags=["Health"])
+def health() -> dict[str, str]:
+    return {"status": "ok"}

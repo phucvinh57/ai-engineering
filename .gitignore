@@ -6,6 +6,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .env
+config.toml
 .DS_Store
 
 # tauri-assistant project data (web/ has its own .gitignore for node_modules/dist)

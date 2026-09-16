@@ -1,196 +1,165 @@
 # tauri-assistant
 
-A retrieve-then-generate RAG chatbot over Tauri app framework documentation:
-the guide/concept docs (tauri.app), the `@tauri-apps/api` JS/TS reference,
-the `tauri` crate's Rust API (docs.rs), and every official plugin's
-permissions/capabilities schema.
+A RAG corpus builder over the [Tauri](https://tauri.app) framework's documentation,
+source and plugin ecosystem. It reads four upstream sources off local git clones,
+normalizes them into one document shape, chunks them with a swappable strategy, and
+stores the result in Chroma.
 
-Uses a local LLM via [Ollama](https://ollama.com)'s OpenAI-compatible API
-(`llama3.2` by default) for chat, a local `sentence-transformers`
-model (`all-MiniLM-L6-v2`) for embeddings, Chroma as an embedded vector
-store, FastAPI for the backend, and a Vite + React frontend.
+Fetching and ingesting are actions on a small FastAPI service, not a CLI. The
+chat/web layers described in earlier revisions of this file do not exist yet.
+
+[DECISIONS.md](DECISIONS.md) records why the pipeline is shaped this way — the
+measurements behind the chunking default, the token-budget traps, and the rejected
+alternatives.
 
 ## Setup
 
-Pull the local chat model with Ollama (make sure `ollama serve` is running):
-
-```bash
-ollama pull llama3.2
-```
-
-From the repo root:
-
-```bash
+```sh
 uv sync
-cp projects/tauri-assistant/.env.example projects/tauri-assistant/.env
+cp .env.example .env            # optional; every value has a default
+uv run tauri-assistant          # starts the API on http://0.0.0.0:8000
 ```
+
+The first ingest downloads the embedding model (bge-m3 is ~2.2GB). To use the much
+smaller `all-MiniLM-L6-v2` instead, set `EMBEDDING_MODEL` — but see the note on its
+256-token limit under [Chunking](#chunking).
 
 ## Usage
 
-```bash
-# Clone doc/API/plugin repos + parse guide/JS-API/permissions (tier 1); tier 2 adds a docs.rs crawl
-uv run --package tauri-assistant tauri-assistant fetch --tier 1
+Fetch and ingest are triggered over HTTP and run in the background; each returns
+`202` immediately and rejects a second trigger while one is already in flight
+(`409`). Progress shows up in the server logs.
 
-# Chunk, embed, and store into Chroma
-uv run --package tauri-assistant tauri-assistant ingest --tier 1
+```sh
+# Shallow-clone/pull tauri-docs, tauri, plugins-workspace
+curl -X POST localhost:8000/fetch
 
-# Chunk/doc counts by source
-uv run --package tauri-assistant tauri-assistant stats
-
-# Pure retrieval, no LLM
-uv run --package tauri-assistant tauri-assistant search "how do I grant a plugin permission to a window"
-
-# API server
-uv run --package tauri-assistant tauri-assistant serve
+# Chunk, embed and upsert. Incremental: unchanged documents are skipped entirely
+curl -X POST localhost:8000/ingest -H 'content-type: application/json' -d '{}'
+curl -X POST localhost:8000/ingest -d '{"source": ["tauri-docs"]}'   # one source
+curl -X POST localhost:8000/ingest -d '{"full": true}'               # re-embed everything
 ```
 
-Frontend:
+## Sources
 
-```bash
-cd projects/tauri-assistant/web
-npm install
-npm run dev
+| Source | Input | Unit | Documents |
+|---|---|---|---|
+| `tauri-docs` | 161 Starlight `.mdx` guide pages | page | 134 |
+| `plugin-permissions` | 217 `permissions/*.toml` across 31 plugins | permission / set / command | 420 |
+| `js-api` | `@tauri-apps/api` TypeScript + JSDoc | exported symbol or class method | 409 |
+| `rust-api` | `///` doc comments in the workspace crates | item | 1986 |
+
+Translated page trees (`zh-cn/`, `ja/`, …) are excluded by default: they duplicate the
+English corpus with near-identical vectors that crowd out real answers. `blog/` and
+`releases/` are excluded for staleness. Both are `CHUNKING_EXCLUDE_GLOBS`.
+
+## Chunking
+
+Measured on the English guide pages, with the model's own tokenizer:
+
+| Unit | p50 tokens | p90 | max | over 256 |
+|---|---|---|---|---|
+| Whole page | 1487 | 4328 | 12718 | **97%** |
+| Heading section | 186 | 592 | 5148 | 35% |
+
+Two findings drive the default:
+
+- **`all-MiniLM-L6-v2` truncates at 256 tokens**, not the 512 its tokenizer config
+  advertises — sentence-transformers uses `max_seq_length` from
+  `sentence_bert_config.json`. Past that, text is dropped with no error. Whole-page
+  chunks would lose ~87% of a median page silently.
+- **This corpus runs 2.12 tokens/word, and 2.80 inside code fences**, far above the
+  usual ~1.3, because it is dense with identifiers, paths and code. Character- or
+  word-based sizing under-counts by roughly 2x.
+
+So chunks are **heading sections**, with the tails bounded: stubs merge into the next
+sibling, oversized sections split without severing code fences. The budget comes from
+the embedding model itself (`ingest/chunking/tokens.py`), so swapping models re-derives
+it rather than silently overrunning.
+
+### Swapping strategies
+
+`Document` in, `Chunk` out — nothing upstream or downstream names a strategy:
+
+```
+sources/*  ->  Document  ->  Chunker (swappable)  ->  [Chunk]  ->  db  ->  Chroma
 ```
 
-The Vite dev server proxies `/api` to `localhost:8000`.
+| Strategy | Behaviour |
+|---|---|
+| `heading` | Heading sections, code-fence aware. The default for prose. |
+| `record` | Identity pass for pre-split sources (permissions, symbols, items). |
+| `fixed` | Fixed token windows with overlap. A baseline: it cuts through fences. |
+| `whole` | One chunk per document. A baseline. |
 
-Run the test suite:
+Size bounds, breadcrumb prefixing and parent linkage live in post-processors that wrap
+*any* strategy (`ingest/chunking/postprocess.py`), so a new strategy only decides where
+to cut and inherits every invariant the storage layer expects. Adding one is a module
+under `strategies/` plus a line in the `CHUNKERS` registry.
 
-```bash
-uv run --package tauri-assistant pytest projects/tauri-assistant/tests
+## Comparing choices
+
+The index is a pure function of `(corpus, chunking config, embedding config)`. Those
+inputs are hashed into a **variant fingerprint** that names the Chroma collection, so:
+
+- changing the chunker or embedding model writes to a **different collection** — two
+  experiments can never contaminate each other, and both stay queryable for comparison.
+  (This is also forced: MiniLM is 384-dimensional and bge-m3 is 1024.)
+- leaving them alone writes to the **same collection**, so a repo update is a
+  document-level diff rather than a rebuild.
+- every cost figure recorded in `catalog.latest_runs` is keyed back to the exact config.
+
+```sh
+curl -X POST localhost:8000/ingest -d '{}'                       # current config
+CHUNKING_STRATEGY=fixed uv run tauri-assistant                  # a second, isolated variant
 ```
+
+Vectors are cached on `(model, sha256(text))` in `data/catalog.db`, so a variant sweep
+re-embeds only what genuinely differs — in practice a 99% hit rate when only chunking
+parameters move.
+
+### Adding a golden set
+
+Retrieval quality has to be scored against ground truth expressed as
+`question -> (document_id, heading_path substring)` — **never chunk ids**, which change
+whenever chunking does and would silently invalidate the dataset the moment you compared
+two chunkers. `eval_run` in the catalog is shaped for this; the dataset itself is not
+written yet.
+
+## Layout
+
+```
+src/tauri_assistant/
+├── settings.py              pydantic-settings groups: init > env > .env > config.toml
+├── db.py                    Chroma, addressed by variant fingerprint
+├── api/                     FastAPI app: fetch/ingest as background-triggered actions
+├── sources/                 one normalizer per upstream source -> Document
+└── ingest/
+    ├── types.py             Document / Chunk -- the stable contract
+    ├── variant.py           fingerprinting
+    ├── catalog.py           SQLite: runs, parent sections, eval, embedding cache
+    ├── embedding.py         cached embedder
+    ├── pipeline.py          incremental ingest
+    └── chunking/
+        ├── tokens.py        budget derived from the embedding model
+        ├── base.py          Chunker protocol + heading parser
+        ├── textsplit.py     fence-aware splitting
+        ├── postprocess.py   merge / parent / budget -- shared by all strategies
+        └── strategies/
+```
+
+Chroma holds the `doc_hash` on every chunk, so the ingest manifest is derived from the
+collection itself rather than tracked separately — nothing can drift out of sync if a
+run dies partway. The SQLite catalog holds only what Chroma should not: parent section
+texts, run history, eval results, and the embedding cache.
 
 ## Telemetry (optional)
 
-`/api/chat` and `/api/search` can trace every real query -- condensed
-question, retrieved chunks + scores, the generated answer, latency, and
-user thumbs up/down -- to [Langfuse](https://langfuse.com), turning live
-traffic into evaluation data (see [Evaluation](#evaluation) below). It's
-fully optional: with no keys configured, telemetry is a complete no-op --
-zero warnings, zero network calls.
+Langfuse, disabled unless `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` are set. Not
+currently wired into any code path.
 
-```bash
-# From the repo root. Self-hosted (Docker; see infra/langfuse/README.md),
-# or use Langfuse Cloud instead -- see that README for the trade-off.
-docker compose -f infra/langfuse/docker-compose.yml up -d
+## Tests
+
+```sh
+uv run pytest
 ```
-
-Then set `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` in
-`.env` (see `.env.example`) and restart `serve`. Every assistant reply in
-the web UI gets a 👍/👎 that scores the corresponding trace.
-
-## Architecture
-
-```mermaid
-flowchart TD
-    subgraph Sources
-        A1[tauri-docs repo\nMDX guide pages]
-        A2[tauri repo\npackages/api/src TS + JSDoc]
-        A3[docs.rs\nrustdoc HTML pages]
-        A4[plugins-workspace repo\npermissions/*.toml per plugin]
-    end
-
-    subgraph Ingest pipeline
-        B1[repos.sync_repos\nclone/pull tauri-docs, tauri, plugins-workspace]
-        B2[guide.list_guide_pages\nstrip MDX frontmatter/imports/JSX]
-        B3[js_api.parse_api_file\none JsApiSymbol per top-level export]
-        B4[rust_api.fetch_rust_api_pages\nHTML to markdown, threaded]
-        B5[permissions.parse_plugin_permissions\none record per permission/default/set]
-        B6[manifest\ncontent-hash cache, data/raw + data/manifest.jsonl]
-        C1[chunker.chunk_markdown /\nchunk_js_symbol / chunk_permission\nheading- or symbol-aware, token-bounded]
-        D1[embedder.embed_texts\nlocal sentence-transformers]
-        E1[(ChromaStore\ndata/chroma, upsert by content_hash)]
-    end
-
-    A1 --> B1 --> B2
-    A2 --> B1 --> B3
-    A4 --> B1 --> B5
-    A3 --> B4
-    B2 --> B6
-    B3 --> B6
-    B4 --> B6
-    B5 --> B6
-    B2 --> C1
-    B3 --> C1
-    B4 --> C1
-    B5 --> C1
-    C1 --> D1 --> E1
-
-    subgraph Query pipeline
-        F1[retriever.condense_query\nfold chat history into standalone question]
-        F2[embedder.embed_query]
-        F3[ChromaStore.query\ncosine top_k, optional source filter]
-        F4[retriever.assemble_context\nnumbered context blocks]
-        F5[chat.stream_chat\nlocal LLM via Ollama, streamed + cited]
-    end
-
-    E1 --> F3
-    F1 --> F2 --> F3 --> F4 --> F5
-
-    subgraph Interfaces
-        G1[cli.py\nfetch / ingest / search / stats / eval / serve]
-        G2["api/routes.py\nFastAPI: /api/chat (SSE), /search, /feedback, /stats, /health"]
-        G3[web\nVite + React: Chat.tsx (+ 👍/👎), Search.tsx]
-    end
-
-    G1 -.-> B1
-    G1 -.-> C1
-    G1 -.-> F3
-    G2 --> F5
-    G2 --> F3
-    G3 --> G2
-
-    subgraph Telemetry [Telemetry -- optional]
-        H1[(Langfuse\ntraces, sessions, scores)]
-        H2["eval/harvest.py\ntraces -> GoldenItem candidates"]
-    end
-
-    F1 -.-> H1
-    F3 -.-> H1
-    F5 -.-> H1
-    G2 -. "👍/👎" .-> H1
-    H1 -. "eval harvest" .-> H2
-```
-
-**Ingest** (`tauri-assistant fetch` / `ingest`, orchestrated by `ingest/pipeline.py`):
-
-1. **Fetch** — `sources/repos.py` shallow-clones/pulls `tauri-docs`, `tauri`, and `plugins-workspace`. `sources/guide.py` reads the MDX/Markdown guide pages straight from the `tauri-docs` clone (stripping frontmatter/imports/JSX). `sources/js_api.py` reads `packages/api/src/*.ts` from the `tauri` clone and segments each file into one record per top-level exported symbol, using its leading JSDoc comment. `sources/permissions.py` reads each plugin's `permissions/*.toml` from `plugins-workspace` into one record per `[[permission]]`, `[default]`, or `[[set]]` entry. `sources/rust_api.py` is the one HTTP-fetched source: it scrapes the `tauri` crate's docs.rs pages (retried via `tenacity`, fetched concurrently), cached as markdown under `data/raw/rust-api/`. Every fetched/parsed unit is recorded in `data/manifest.jsonl` (`sources/manifest.py`) keyed by a content hash.
-2. **Chunk** — `ingest/chunker.py` turns each guide/Rust-API markdown page into one chunk per leaf heading section, and each JS API symbol / plugin permission into one chunk. Oversized chunks are token-window-split with overlap. Every chunk gets a breadcrumb prefix (e.g. `@tauri-apps/api > event > listen`, or `fs plugin > permissions > allow-read-file`) so it reads standalone out of context.
-3. **Embed + store** — `ingest/embedder.py` batches chunk text through a local `sentence-transformers` model (no API calls); `ingest/store.py` upserts vectors + text + metadata into a persistent Chroma collection (`data/chroma/`), keyed by content hash for idempotent re-ingestion.
-
-**Query** (`tauri-assistant search`, or `/api/chat` / `/api/search`):
-
-1. `rag/retriever.py` condenses the latest question against chat history into a standalone query (skipped on the first turn), embeds it, and queries Chroma for the top-k nearest chunks (optionally filtered by `source`: `guide` / `js-api` / `rust-api` / `permissions`).
-2. Retrieved chunks are deduplicated and assembled into numbered context blocks (`rag/prompts.py`).
-3. `rag/chat.py` streams a completion from the local LLM (via Ollama's OpenAI-compatible API) grounded in that context via `SYSTEM_PROMPT`, which enforces inline `[n]` citations, calls out required permissions/capabilities, and asks a clarifying question when the desktop/mobile target or Tauri major version is ambiguous. `search`/`/api/search` stop after step 2 (retrieval only, no LLM call).
-
-**Serving**: `api/main.py` wires CORS + a `lifespan` (warms the embedding model, inits/flushes telemetry) + `api/routes.py` (FastAPI) on top of the same `ChromaStore`/`stream_chat` used by the CLI; `/api/chat` streams via Server-Sent Events (`sources` → `token`* → `done`, the last carrying a trace id). The `web/` (Vite + React) `Chat.tsx` and `Search.tsx` components consume these endpoints directly; `Chat.tsx` also posts a rating to `/api/feedback` when you click 👍/👎 on a reply.
-
-## Tiers
-
-- **Tier 1**: guide/concept docs, the JS/TS API reference, and every plugin's
-  permissions schema. Covers everyday app and plugin development.
-- **Tier 2**: adds the `tauri` crate's Rust API docs (a ~200-page docs.rs
-  crawl) for backend/plugin authors working in Rust.
-
-## Evaluation
-
-```bash
-# Score the hand-written golden set (retrieval hit_rate/mrr/precision@k +
-# LLM-judged faithfulness/answer_relevancy); saves a report under data/eval_runs/
-uv run --package tauri-assistant tauri-assistant eval
-
-# Pull real chat traces out of Langfuse and print pasteable GoldenItem candidates
-# (requires telemetry to be configured -- see above)
-uv run --package tauri-assistant tauri-assistant eval harvest --feedback down --days 7
-```
-
-`eval/dataset.py`'s `GOLDEN_SET` is hand-verified against the live corpus,
-so `eval harvest` never auto-appends to it -- promotion stays a human edit.
-The intended loop: harvest `--feedback down` traces (the ones a real user
-rated unhelpful), use `tauri-assistant search` to find the heading_path that
-should have won, fill in `expected_matches`, and paste the result into
-`GOLDEN_SET` as a regression case. `eval` and the live chat path share the
-same `rag/chat.py:prepare_turn` helper (condense + retrieve + prompt
-assembly), so a harvested multi-turn conversation replays exactly as it
-happened live.

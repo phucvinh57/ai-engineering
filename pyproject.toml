@@ -23,15 +23,11 @@ select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
     "F",   # pyflakes
-    "I",   # isort
     "UP",  # pyupgrade
     "B",   # flake8-bugbear
     "SIM", # flake8-simplify
     "C4",  # flake8-comprehensions
 ]
-
-[tool.ruff.lint.isort]
-known-first-party = ["tauri_assistant"]
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's DI pattern relies on calling Depends(...)/Query(...)/etc. in

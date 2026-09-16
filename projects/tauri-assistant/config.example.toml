@@ -1,0 +1,47 @@
+# Optional static config file, checked-in defaults for Settings
+# (src/tauri_assistant/settings.py). Copy to config.toml and edit as needed --
+# any value here can still be overridden by an env var or .env entry of the
+# same name (see .env.example), which takes precedence.
+
+[chat]
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+model = "llama3.2"
+stream_usage = true
+
+[embedding]
+# bge-m3 has an 8192-token context, so a whole doc section (code fence
+# included) fits in one chunk. all-MiniLM-L6-v2 is much smaller and faster
+# but truncates at 256 tokens, which splits ~35% of sections.
+model = "BAAI/bge-m3"
+batch_size = 32
+normalize = true
+
+[chunking]
+# heading | record | fixed | whole -- see ingest/chunking/strategies/.
+# `tauri-assistant chunk --strategy X` compares them without embedding.
+strategy = "heading"
+# Clamped automatically to the embedding model's real limit.
+max_tokens = 1024
+# Chunks under this are merged into the next sibling section.
+min_tokens = 64
+# Only used by the `fixed` strategy.
+overlap_tokens = 64
+# The translated page trees duplicate the English corpus.
+include_translations = false
+exclude_globs = ["_fragments/**", "blog/**", "releases/**"]
+
+[paths]
+# repos/, chroma/ and catalog.db are derived from this.
+# data_dir = "data"
+
+# --- Telemetry (optional; leave the keys blank to disable all tracing) ---
+[langfuse]
+base_url = "http://localhost:3000"
+public_key = ""
+secret_key = ""
+environment = "development"
+enabled = true
+# release = ""
+# sample_rate = 1.0
+# debug = false
