@@ -119,7 +119,6 @@ class TestStrategyContract:
             assert chunk.id
             assert counter.count(chunk.text) <= counter.budget
             assert chunk.metadata["strategy"] == strategy
-            assert chunk.metadata["doc_hash"] == document.hash
 
     @pytest.mark.parametrize("strategy", sorted(CHUNKERS))
     def test_chunk_index_is_contiguous(self, strategy, counter, document):

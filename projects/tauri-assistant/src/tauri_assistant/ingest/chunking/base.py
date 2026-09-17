@@ -1,22 +1,14 @@
-"""The `Chunker` protocol and the markdown primitives strategies share."""
+"""The `Chunker` base class and the markdown primitives strategies share."""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Protocol
 
-from tauri_assistant.ingest.types import Chunk, Document
 
 _HEADING = re.compile(r"^(#{1,6})\s+(\S.*?)\s*#*\s*$")
 _FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
-
-
-class Chunker(Protocol):
-    name: str
-
-    def split(self, doc: Document) -> Iterable[Chunk]: ...
 
 
 @dataclass(frozen=True, slots=True)

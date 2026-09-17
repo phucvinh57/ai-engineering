@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from tauri_assistant.ingest.chunking.strategies.base import Chunker
 from tauri_assistant.ingest.types import Chunk, Document
 
 
-class RecordChunker:
+class RecordChunker(Chunker):
     name = "record"
 
     def split(self, doc: Document) -> Iterable[Chunk]:

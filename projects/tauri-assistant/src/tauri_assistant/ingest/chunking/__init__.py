@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from tauri_assistant.ingest.chunking.base import Chunker, Section, split_sections
+from tauri_assistant.ingest.chunking.base import Section, split_sections
 from tauri_assistant.ingest.chunking.postprocess import (
     AttachParent,
     ChunkResult,
@@ -21,8 +21,8 @@ from tauri_assistant.ingest.chunking.strategies import (
     FixedTokenChunker,
     HeadingSectionChunker,
     RecordChunker,
-    WholeDocumentChunker,
 )
+from tauri_assistant.ingest.chunking.strategies.base import Chunker
 from tauri_assistant.ingest.chunking.tokens import TokenCounter, get_token_counter
 from tauri_assistant.settings import ChunkingSettings, settings
 
@@ -32,7 +32,6 @@ CHUNKERS: dict[str, Callable[[ChunkingSettings, TokenCounter], Chunker]] = {
     "fixed": lambda cfg, counter: FixedTokenChunker(
         counter=counter, size=counter.budget, overlap=cfg.overlap_tokens
     ),
-    "whole": lambda cfg, counter: WholeDocumentChunker(),
 }
 
 

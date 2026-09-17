@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from tauri_assistant.ingest.chunking.base import Chunker
+from tauri_assistant.ingest.chunking.strategies.base import Chunker
 from tauri_assistant.ingest.chunking.textsplit import pack_to_budget
 from tauri_assistant.ingest.chunking.tokens import TokenCounter
 from tauri_assistant.ingest.types import Chunk, Document
@@ -181,7 +181,6 @@ class Pipeline:
                 metadata={
                     **c.metadata,
                     "chunk_index": i,
-                    "doc_hash": doc.hash,
                     "strategy": self._chunker.name,
                     "token_count": self._counter.count(c.text),
                 },

@@ -37,11 +37,6 @@ class Document:
     metadata: Mapping[str, Any] = field(default_factory=dict)
     """`source`, `repo`, `path`, `url`, `kind`."""
 
-    @property
-    def hash(self) -> str:
-        """Incremental-ingest key: unchanged hash means skip this document."""
-        return content_hash(self.text)
-
 
 @dataclass(frozen=True, slots=True)
 class Chunk:

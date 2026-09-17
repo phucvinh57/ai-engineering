@@ -62,7 +62,6 @@ def to_metadata(chunk: Chunk) -> dict[str, Any]:
         "source": str(chunk.metadata.get("source", "")),
         "path": str(chunk.metadata.get("path", "")),
         "kind": str(chunk.metadata.get("kind", "")),
-        "doc_hash": str(chunk.metadata.get("doc_hash", "")),
         "chunk_index": int(chunk.metadata.get("chunk_index", 0)),
         "token_count": int(chunk.metadata.get("token_count", 0)),
         "strategy": str(chunk.metadata.get("strategy", "")),
@@ -89,47 +88,24 @@ def upsert_chunks(variant: Variant, chunks: Sequence[Chunk], vectors: Sequence[S
     return len(chunks)
 
 
-def delete_documents(variant: Variant, document_ids: Sequence[str]) -> int:
-    """Remove every chunk belonging to the given documents.
+def delete_source(variant: Variant, source_name: str) -> int:
+    """Remove every chunk belonging to a source, ahead of a full reindex.
 
-    Re-chunking a changed document can yield *fewer* chunks than before, and
-    chunk ids are content-addressed, so an upsert alone would leave the extras
-    behind as orphans that still answer queries.
+    A source is reindexed as a whole -- there is no per-document diff to
+    tell an edited page from a removed one -- so the simplest correct move
+    is to clear everything the source previously wrote before re-chunking
+    its current documents.
     """
-    if not document_ids:
-        return 0
     collection = get_collection(variant)
     removed = 0
-    for start in range(0, len(document_ids), 200):
-        window = list(document_ids[start : start + 200])
-        existing = collection.get(where={"document_id": {"$in": window}}, include=[])
-        ids = existing.get("ids") or []
-        if ids:
-            collection.delete(ids=ids)
-            removed += len(ids)
-    return removed
-
-
-def indexed_documents(variant: Variant) -> dict[str, str]:
-    """The ingest manifest: `document_id -> doc_hash`, read back from Chroma."""
-    try:
-        collection = get_collection(variant, create=False)
-    except Exception:
-        return {}
-
-    manifest: dict[str, str] = {}
-    offset, page = 0, 5_000
     while True:
-        batch = collection.get(limit=page, offset=offset, include=["metadatas"])
-        metadatas = batch.get("metadatas") or []
-        if not metadatas:
+        batch = collection.get(where={"source": source_name}, limit=5_000, include=[])
+        ids = batch.get("ids") or []
+        if not ids:
             break
-        for metadata in metadatas:
-            doc_id = str(metadata.get("document_id", ""))
-            if doc_id:
-                manifest[doc_id] = str(metadata.get("doc_hash", ""))
-        offset += page
-    return manifest
+        collection.delete(ids=ids)
+        removed += len(ids)
+    return removed
 
 
 def collection_stats(variant: Variant) -> Stats:

@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from tauri_assistant.ingest.chunking.strategies.base import Chunker
 from tauri_assistant.ingest.chunking.textsplit import window_by_tokens
 from tauri_assistant.ingest.chunking.tokens import TokenCounter, get_token_counter
 from tauri_assistant.ingest.types import Chunk, Document
 
 
-class FixedTokenChunker:
+class FixedTokenChunker(Chunker):
     name = "fixed"
 
     def __init__(

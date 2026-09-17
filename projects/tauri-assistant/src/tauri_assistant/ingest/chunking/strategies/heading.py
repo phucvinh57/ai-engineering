@@ -12,10 +12,11 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from tauri_assistant.ingest.chunking.base import split_sections
+from tauri_assistant.ingest.chunking.strategies.base import Chunker
 from tauri_assistant.ingest.types import Chunk, Document
 
 
-class HeadingSectionChunker:
+class HeadingSectionChunker(Chunker):
     name = "heading"
 
     def __init__(self, min_level: int = 2, max_level: int = 4) -> None:

@@ -1,15 +1,16 @@
 """SQLite catalog for everything Chroma should not hold.
 
-Chroma stays the single source of truth for *what is indexed* -- the
-`doc_hash` on each chunk makes the ingest manifest derivable from the
-collection itself, so there is nothing to drift if a run dies halfway. This
-catalog holds only the things that are not a duplicate of that: parent
-section texts, run history, evaluation results, and the embedding cache.
+Ingest is versioned per source, not per document: `source_version` records
+the git sha a source was last indexed at, and a sha change means the whole
+source is re-chunked and re-embedded rather than diffed page by page. This
+catalog also holds parent section texts, run history, evaluation results,
+and the embedding cache.
 """
 
 from __future__ import annotations
 
 import array
+import contextlib
 import json
 import sqlite3
 import time
@@ -32,21 +33,31 @@ CREATE TABLE IF NOT EXISTS variant (
 );
 
 CREATE TABLE IF NOT EXISTS ingest_run (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    fingerprint      TEXT NOT NULL,
-    started_at       REAL NOT NULL,
-    finished_at      REAL,
-    repo_shas        TEXT,
-    docs_total       INTEGER DEFAULT 0,
-    docs_changed     INTEGER DEFAULT 0,
-    docs_removed     INTEGER DEFAULT 0,
-    chunks_written   INTEGER DEFAULT 0,
-    chunks_deleted   INTEGER DEFAULT 0,
-    embed_seconds    REAL DEFAULT 0,
-    cache_hits       INTEGER DEFAULT 0,
-    cache_misses     INTEGER DEFAULT 0,
-    token_stats      TEXT,
-    status           TEXT DEFAULT 'running'
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint        TEXT NOT NULL,
+    started_at         REAL NOT NULL,
+    finished_at        REAL,
+    repo_shas          TEXT,
+    docs_total         INTEGER DEFAULT 0,
+    sources_total      INTEGER DEFAULT 0,
+    sources_reindexed  INTEGER DEFAULT 0,
+    chunks_written     INTEGER DEFAULT 0,
+    chunks_deleted     INTEGER DEFAULT 0,
+    embed_seconds      REAL DEFAULT 0,
+    cache_hits         INTEGER DEFAULT 0,
+    cache_misses       INTEGER DEFAULT 0,
+    token_stats        TEXT,
+    status             TEXT DEFAULT 'running'
+);
+
+-- The version a source was last indexed at: reindexing checks this against
+-- the source's current git sha rather than diffing individual documents.
+CREATE TABLE IF NOT EXISTS source_version (
+    fingerprint  TEXT NOT NULL,
+    source       TEXT NOT NULL,
+    git_sha      TEXT NOT NULL,
+    updated_at   REAL NOT NULL,
+    PRIMARY KEY (fingerprint, source)
 );
 
 CREATE TABLE IF NOT EXISTS parent_section (
@@ -82,8 +93,8 @@ CREATE INDEX IF NOT EXISTS idx_run_variant ON ingest_run (fingerprint);
 @dataclass(frozen=True, slots=True)
 class RunStats:
     docs_total: int = 0
-    docs_changed: int = 0
-    docs_removed: int = 0
+    sources_total: int = 0
+    sources_reindexed: int = 0
     chunks_written: int = 0
     chunks_deleted: int = 0
     embed_seconds: float = 0.0
@@ -103,6 +114,11 @@ def connect() -> Iterator[sqlite3.Connection]:
     conn.row_factory = sqlite3.Row
     try:
         conn.executescript(SCHEMA)
+        # ingest_run predates sources_total/sources_reindexed; add them to
+        # any catalog created before this column split existed.
+        for column in ("sources_total", "sources_reindexed"):
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute(f"ALTER TABLE ingest_run ADD COLUMN {column} INTEGER DEFAULT 0")
         yield conn
         conn.commit()
     finally:
@@ -148,14 +164,14 @@ def start_run(fingerprint: str, repo_shas: dict[str, str]) -> int:
 def finish_run(run_id: int, stats: RunStats, token_stats: dict, status: str = "ok") -> None:
     with connect() as conn:
         conn.execute(
-            "UPDATE ingest_run SET finished_at=?, docs_total=?, docs_changed=?, docs_removed=?, "
+            "UPDATE ingest_run SET finished_at=?, docs_total=?, sources_total=?, sources_reindexed=?, "
             "chunks_written=?, chunks_deleted=?, embed_seconds=?, cache_hits=?, cache_misses=?, "
             "token_stats=?, status=? WHERE id=?",
             (
                 time.time(),
                 stats.docs_total,
-                stats.docs_changed,
-                stats.docs_removed,
+                stats.sources_total,
+                stats.sources_reindexed,
                 stats.chunks_written,
                 stats.chunks_deleted,
                 stats.embed_seconds,
@@ -193,13 +209,36 @@ def get_parents(fingerprint: str, parent_ids: Sequence[str]) -> dict[str, str]:
     return {row["parent_id"]: row["text"] for row in rows}
 
 
-def drop_document_parents(fingerprint: str, document_ids: Sequence[str]) -> None:
-    if not document_ids:
-        return
+def drop_source_parents(fingerprint: str, source: str) -> None:
+    """Clear parent sections for a source ahead of a full reindex.
+
+    Document ids are always `f"{source}:..."`, so a prefix match clears
+    parents for documents the source no longer produces too -- there is no
+    separate "removed" list to consult.
+    """
     with connect() as conn:
-        conn.executemany(
-            "DELETE FROM parent_section WHERE fingerprint=? AND document_id=?",
-            [(fingerprint, doc_id) for doc_id in document_ids],
+        conn.execute(
+            "DELETE FROM parent_section WHERE fingerprint=? AND document_id LIKE ?",
+            (fingerprint, f"{source}:%"),
+        )
+
+
+def get_source_shas(fingerprint: str) -> dict[str, str]:
+    """`source -> git_sha` as of the last successful reindex of each source."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT source, git_sha FROM source_version WHERE fingerprint=?", (fingerprint,)
+        ).fetchall()
+    return {row["source"]: row["git_sha"] for row in rows}
+
+
+def set_source_sha(fingerprint: str, source: str, git_sha: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO source_version (fingerprint, source, git_sha, updated_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (fingerprint, source) DO UPDATE SET "
+            "git_sha=excluded.git_sha, updated_at=excluded.updated_at",
+            (fingerprint, source, git_sha, time.time()),
         )
 
 

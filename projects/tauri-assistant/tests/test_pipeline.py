@@ -1,9 +1,9 @@
-"""Incremental ingest against a real Chroma collection in a temp directory.
+"""Ingest against a real Chroma collection in a temp directory.
 
 These are the tests worth having end-to-end rather than mocked: the whole
-point of the design is that a repo update re-embeds only what changed and
-leaves no orphans behind, and neither property is visible from unit tests of
-the parts.
+point of the design is that an unchanged source's git sha skips it entirely,
+a changed source is fully rebuilt with no orphans left behind, and neither
+property is visible from unit tests of the parts.
 """
 
 from __future__ import annotations
@@ -40,6 +40,7 @@ class FakeSource:
     repo = "fake"
     strategy = "heading"
     documents: list[Document] = []
+    git_sha = "sha-1"
 
     def iter_documents(self):
         yield from self.documents
@@ -54,6 +55,11 @@ def make_doc(doc_id: str, body: str) -> Document:
     )
 
 
+def document_ids(variant: Variant) -> set[str]:
+    metadatas = db.get_collection(variant).get(include=["metadatas"])["metadatas"]
+    return {m["document_id"] for m in metadatas}
+
+
 @pytest.fixture
 def isolated(tmp_path, monkeypatch, counter):
     monkeypatch.setattr(settings.paths, "data_dir", tmp_path)
@@ -64,6 +70,7 @@ def isolated(tmp_path, monkeypatch, counter):
     )
     db.get_client.cache_clear()
     FakeSource.documents = []
+    FakeSource.git_sha = "sha-1"
     yield tmp_path
     db.get_client.cache_clear()
 
@@ -81,27 +88,31 @@ def run(variant, **kwargs):
     return pipeline.ingest(sources=["fake"], variant=variant, **kwargs)
 
 
-class TestIncremental:
-    def test_first_run_writes_everything(self, isolated, variant):
+class TestSourceVersioning:
+    def test_first_run_reindexes_the_source(self, isolated, variant):
         FakeSource.documents = [make_doc("a", "alpha"), make_doc("b", "beta")]
         report = run(variant)
-        assert report.stats.docs_changed == 2
+        assert report.stats.sources_reindexed == 1
+        assert report.stats.docs_total == 2
         assert report.stats.chunks_written > 0
 
-    def test_unchanged_corpus_re_embeds_nothing(self, isolated, variant):
+    def test_unchanged_git_sha_skips_the_source_entirely(self, isolated, variant):
         FakeSource.documents = [make_doc("a", "alpha"), make_doc("b", "beta")]
         run(variant)
         report = run(variant)
-        assert report.stats.docs_changed == 0
+        assert report.stats.sources_reindexed == 0
+        assert report.stats.docs_total == 0
         assert report.stats.chunks_written == 0
-        assert report.stats.docs_total == 2
+        assert document_ids(variant) == {"fake:a", "fake:b"}
 
-    def test_only_the_edited_document_is_re_embedded(self, isolated, variant):
+    def test_a_new_git_sha_reindexes_the_whole_source(self, isolated, variant):
         FakeSource.documents = [make_doc("a", "alpha"), make_doc("b", "beta")]
         run(variant)
         FakeSource.documents = [make_doc("a", "alpha EDITED"), make_doc("b", "beta")]
+        FakeSource.git_sha = "sha-2"
         report = run(variant)
-        assert report.stats.docs_changed == 1
+        assert report.stats.sources_reindexed == 1
+        assert report.stats.docs_total == 2
 
     def test_editing_leaves_no_orphan_chunks(self, isolated, variant):
         """Re-chunking can yield fewer chunks; content-addressed ids mean an
@@ -113,26 +124,26 @@ class TestIncremental:
         assert many > 1, "the fixture must actually split, or this proves nothing"
 
         FakeSource.documents = [make_doc("a", "short")]
+        FakeSource.git_sha = "sha-2"
         run(variant)
 
         expected = len(pipeline.chunk_documents(FakeSource.documents)[0])
         stats = db.collection_stats(variant)
         assert stats.chunks == expected < many, "stale chunks were left behind"
-        assert set(db.indexed_documents(variant)) == {"fake:a"}
 
-    def test_removed_documents_are_deleted(self, isolated, variant):
+    def test_removed_documents_disappear_on_the_next_git_sha(self, isolated, variant):
         FakeSource.documents = [make_doc("a", "alpha"), make_doc("b", "beta")]
         run(variant)
         FakeSource.documents = [make_doc("a", "alpha")]
-        report = run(variant)
-        assert report.stats.docs_removed == 1
-        assert set(db.indexed_documents(variant)) == {"fake:a"}
+        FakeSource.git_sha = "sha-2"
+        run(variant)
+        assert document_ids(variant) == {"fake:a"}
 
-    def test_full_rebuild_ignores_the_diff(self, isolated, variant):
+    def test_full_rebuild_reindexes_even_an_unchanged_sha(self, isolated, variant):
         FakeSource.documents = [make_doc("a", "alpha")]
         run(variant)
         report = run(variant, full=True)
-        assert report.stats.docs_changed == 1
+        assert report.stats.sources_reindexed == 1
 
 
 class TestVariantIsolation:
@@ -170,8 +181,6 @@ class TestCatalog:
     def test_parents_round_trip(self, isolated, variant):
         FakeSource.documents = [make_doc("a", "alpha beta")]
         run(variant)
-        manifest = db.indexed_documents(variant)
-        assert manifest
         collection = db.get_collection(variant)
         metadatas = collection.get(include=["metadatas"])["metadatas"]
         parent_ids = [m["parent_id"] for m in metadatas if m.get("parent_id")]
@@ -183,6 +192,11 @@ class TestCatalog:
         run(variant)
         rows = catalog.latest_runs(5)
         assert rows and rows[0]["status"] == "ok"
+
+    def test_source_sha_is_recorded_after_a_successful_reindex(self, isolated, variant):
+        FakeSource.documents = [make_doc("a", "alpha")]
+        run(variant)
+        assert catalog.get_source_shas(variant.fingerprint) == {"fake": "sha-1"}
 
     def test_embedding_cache_round_trips(self, isolated):
         catalog.store_vectors("m", {"h": [0.5, 0.25]})
