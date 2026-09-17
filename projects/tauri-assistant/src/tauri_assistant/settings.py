@@ -76,8 +76,8 @@ class PathSettings(_GroupSettings):
 class ChunkingSettings(_GroupSettings):
     model_config = SettingsConfigDict(env_prefix="CHUNKING_", toml_table_header=("chunking",))
     strategy: str = "heading"
-    # Upper bound we impose; the effective budget is min(this, the embedding
-    # model's own max_seq_length) -- see ingest/chunking/tokens.py.
+    # Must fit within the embedding model's own max_seq_length; the server
+    # rejects startup if it doesn't -- see ingest/chunking/tokens.py.
     max_tokens: int = 1024
     min_tokens: int = 64
     overlap_tokens: int = 64

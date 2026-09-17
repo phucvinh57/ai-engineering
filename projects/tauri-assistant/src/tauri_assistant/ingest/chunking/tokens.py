@@ -27,6 +27,10 @@ from huggingface_hub import hf_hub_download
 from transformers import AutoTokenizer
 
 
+class ChunkBudgetError(RuntimeError):
+    """`chunking.max_tokens` exceeds what the embedding model can actually hold."""
+
+
 class TokenCounter(Protocol):
     def count(self, text: str) -> int: ...
 
@@ -57,12 +61,12 @@ class HFTokenCounter:
                 model_limit = max_tokens
 
         self._model_limit = int(model_limit)
-        self._budget = min(max_tokens, self._model_limit)
-        if self._budget < max_tokens:
-            logger.warning(
-                f"{model_name} truncates at {self._model_limit} tokens; "
-                f"clamping chunk budget from {max_tokens} to {self._budget}"
+        if max_tokens > self._model_limit:
+            raise ChunkBudgetError(
+                f"chunking.max_tokens={max_tokens} exceeds {model_name}'s max_seq_length "
+                f"({self._model_limit}); lower chunking.max_tokens or switch embedding models"
             )
+        self._budget = max_tokens
 
     def count(self, text: str) -> int:
         return len(self._tokenizer.encode(text, add_special_tokens=False))

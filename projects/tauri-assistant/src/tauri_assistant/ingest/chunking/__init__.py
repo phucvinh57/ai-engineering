@@ -23,7 +23,7 @@ from tauri_assistant.ingest.chunking.strategies import (
     RecordChunker,
 )
 from tauri_assistant.ingest.chunking.strategies.base import Chunker
-from tauri_assistant.ingest.chunking.tokens import TokenCounter, get_token_counter
+from tauri_assistant.ingest.chunking.tokens import ChunkBudgetError, TokenCounter, get_token_counter
 from tauri_assistant.settings import ChunkingSettings, settings
 
 CHUNKERS: dict[str, Callable[[ChunkingSettings, TokenCounter], Chunker]] = {
@@ -64,6 +64,7 @@ def build_chunker(
 
 __all__ = [
     "CHUNKERS",
+    "ChunkBudgetError",
     "Chunker",
     "ChunkResult",
     "Pipeline",

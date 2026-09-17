@@ -37,3 +37,4 @@ class FixedTokenChunker(Chunker):
                 breadcrumb=doc.breadcrumb,
                 metadata={**doc.metadata, "chunk_index": index},
             )
+
