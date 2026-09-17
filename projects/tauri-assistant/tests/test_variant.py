@@ -12,6 +12,7 @@ def make(**overrides) -> Variant:
         "embedding_model": "BAAI/bge-m3",
         "chunking": {"strategy": "heading", "max_tokens": 1024, "min_tokens": 64},
         "sources": {"include_translations": False, "exclude_globs": ["blog/**"]},
+        "source_shas": {"tauri-docs": "abc123"},
     }
     return Variant(**(base | overrides))
 
@@ -59,6 +60,6 @@ class TestCollectionName:
 
 
 def test_from_settings_round_trips(monkeypatch):
-    variant = Variant.from_settings()
+    variant = Variant.from_settings({"tauri-docs": "abc123"})
     assert variant.as_dict()["embedding_model"] == variant.embedding_model
     assert Variant(**variant.as_dict()).fingerprint == variant.fingerprint

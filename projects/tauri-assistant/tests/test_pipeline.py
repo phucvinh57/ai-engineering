@@ -64,8 +64,8 @@ def isolated(tmp_path, monkeypatch, counter):
     monkeypatch.setattr(settings.paths, "data_dir", tmp_path)
     monkeypatch.setattr(pipeline, "get_token_counter", lambda *a, **k: counter)
     monkeypatch.setattr(pipeline, "Embedder", FakeEmbedder)
-    monkeypatch.setitem(
-        __import__("tauri_assistant.sources", fromlist=["SOURCES"]).SOURCES, "fake", FakeSource
+    monkeypatch.setattr(
+        __import__("tauri_assistant.sources", fromlist=["SOURCES"]), "SOURCES", {"fake": FakeSource}
     )
     get_repository.cache_clear()
     FakeSource.documents = []
@@ -85,7 +85,7 @@ def variant() -> Variant:
 
 
 def run(variant, **kwargs):
-    return pipeline.ingest(source_names=["fake"], variant=variant, **kwargs)
+    return pipeline.ingest(variant=variant, **kwargs)
 
 
 class TestVariantSkipping:
@@ -112,9 +112,9 @@ class TestVariantSkipping:
 
     def test_a_new_source_sha_lands_in_a_different_collection(self, isolated):
         FakeSource.documents = [make_doc("a", "alpha")]
-        first = pipeline.ingest(source_names=["fake"])
+        first = pipeline.ingest()
         FakeSource.git_sha = "sha-2"
-        second = pipeline.ingest(source_names=["fake"])
+        second = pipeline.ingest()
         assert first.variant.collection_name != second.variant.collection_name
         assert document_ids(first.variant) == {"fake:a"}
         assert document_ids(second.variant) == {"fake:a"}

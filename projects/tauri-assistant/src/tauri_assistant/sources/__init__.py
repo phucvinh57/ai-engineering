@@ -16,8 +16,8 @@ SOURCES: dict[str, type[Source]] = {
 }
 
 
-def get_sources(names: list[str]) -> list[Source]:
-    return [SOURCES[n]() for n in names]
+def get_sources() -> list[Source]:
+    return [cls() for cls in SOURCES.values()]
 
 
 __all__ = ["SOURCES", "Source", "get_sources"]

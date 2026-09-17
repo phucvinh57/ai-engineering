@@ -33,9 +33,9 @@ def _run_fetch() -> None:
         _fetch_lock.release()
 
 
-def _run_ingest(source: list[str], force: bool) -> None:
+def _run_ingest(force: bool) -> None:
     try:
-        ingest(source_names=source, force=force)
+        ingest(force=force)
     except Exception:
         logger.exception("Ingest failed")
     finally:
@@ -56,5 +56,5 @@ def trigger_ingest(request: IngestRequest, tasks: BackgroundTasks) -> ActionAcce
     """Chunk, embed and upsert into the current variant's collection."""
     if not _ingest_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="An ingest is already running.")
-    tasks.add_task(_run_ingest, request.source, request.force)
+    tasks.add_task(_run_ingest, request.force)
     return ActionAccepted()

@@ -104,7 +104,6 @@ def chunk_documents(
 
 
 def ingest(
-    source_names: list[str],
     variant: Variant | None = None,
     force: bool = False,
 ) -> IngestReport:
@@ -112,7 +111,7 @@ def ingest(
     counter = get_token_counter()
     chunker = build_chunker(counter=counter)
 
-    sources = get_sources(source_names)
+    sources = get_sources()
     current_shas = {s.name: s.git_sha for s in sources}
     variant = variant or Variant.from_settings(current_shas)
     report = IngestReport(variant=variant)
@@ -144,10 +143,10 @@ def ingest(
         db.parent_section.save(variant.fingerprint, parents)
         report.token_counts.extend(int(c.metadata.get("token_count", 0)) for c in chunks)
 
+        # The post-processors are supposed to make this impossible
+        # It is a deliberate runtime defense
         oversized = [c for c in chunks if c.metadata.get("token_count", 0) > counter.budget]
         if oversized:
-            # The post-processors are supposed to make this impossible; if it
-            # happens, the embedding model would silently truncate instead.
             raise RuntimeError(
                 f"{len(oversized)} chunk(s) exceed the {counter.budget}-token budget, "
                 f"largest {max(c.metadata['token_count'] for c in oversized)}"
@@ -156,9 +155,12 @@ def ingest(
         for start in range(0, len(chunks), WRITE_BATCH):
             batch = chunks[start : start + WRITE_BATCH]
             began = time.perf_counter()
+
             vectors = embedder.embed_documents([c.text for c in batch])
+
             elapsed += time.perf_counter() - began
             written += store.upsert_chunks(batch, vectors)
+
             logger.info(f"  embedded {min(start + WRITE_BATCH, len(chunks))}/{len(chunks)} chunks")
 
     report.stats = RunStats(
