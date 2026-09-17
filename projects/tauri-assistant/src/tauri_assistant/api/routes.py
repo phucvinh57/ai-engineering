@@ -18,7 +18,7 @@ from tauri_assistant.api.schemas import ActionAccepted, IngestRequest
 from tauri_assistant.ingest.pipeline import ingest
 from tauri_assistant.sources.fetch import sync_repos
 
-routers = APIRouter()
+router = APIRouter()
 
 _fetch_lock = threading.Lock()
 _ingest_lock = threading.Lock()
@@ -33,16 +33,16 @@ def _run_fetch() -> None:
         _fetch_lock.release()
 
 
-def _run_ingest(source: list[str], full: bool, use_cache: bool) -> None:
+def _run_ingest(source: list[str], force: bool) -> None:
     try:
-        ingest(sources=source, full=full, use_cache=use_cache)
+        ingest(sources=source, force=force)
     except Exception:
         logger.exception("Ingest failed")
     finally:
         _ingest_lock.release()
 
 
-@routers.post("/fetch", status_code=202, response_model=ActionAccepted)
+@router.post("/fetch", status_code=202, response_model=ActionAccepted)
 def fetch(tasks: BackgroundTasks) -> ActionAccepted:
     """Clone or pull the upstream repositories."""
     if not _fetch_lock.acquire(blocking=False):
@@ -51,10 +51,10 @@ def fetch(tasks: BackgroundTasks) -> ActionAccepted:
     return ActionAccepted()
 
 
-@routers.post("/ingest", status_code=202, response_model=ActionAccepted)
+@router.post("/ingest", status_code=202, response_model=ActionAccepted)
 def trigger_ingest(request: IngestRequest, tasks: BackgroundTasks) -> ActionAccepted:
     """Chunk, embed and upsert into the current variant's collection."""
     if not _ingest_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="An ingest is already running.")
-    tasks.add_task(_run_ingest, request.source, request.full, request.use_cache)
+    tasks.add_task(_run_ingest, request.source, request.force)
     return ActionAccepted()

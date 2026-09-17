@@ -30,6 +30,7 @@ dependencies = [
     "loguru>=0.7.3",
     "tree-sitter>=0.26.0",
     "tree-sitter-typescript>=0.23.2",
+    "peewee>=4.5.1",
 ]
 
 [project.scripts]

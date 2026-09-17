@@ -9,8 +9,7 @@ SourceName = Literal[*SOURCES]
 
 class IngestRequest(BaseModel):
     source: list[SourceName]
-    full: bool = False
-    use_cache: bool = True
+    force: bool = False
 
 
 class ActionAccepted(BaseModel):

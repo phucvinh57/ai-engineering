@@ -1,10 +1,10 @@
-"""Ingest: sources -> chunks -> embeddings -> Chroma, per source.
+"""Ingest: sources -> chunks -> embeddings -> Chroma, per variant.
 
-Versioning is per source, not per document: each source's git sha is
-compared against the sha it was last indexed at, and an unchanged source is
-skipped entirely -- its documents are never even collected. A changed source
-is fully re-chunked and re-embedded, since there is no cheaper way to tell
-an edited page from a removed one without per-document bookkeeping.
+Each source's git sha feeds into `variant.fingerprint`, so a sha or config
+change resolves to a brand-new, empty collection rather than an existing one
+that needs patching. That makes ingest a single decision -- build this exact
+variant from scratch, or skip because it's already there -- with no
+per-source diffing to get right.
 """
 
 from __future__ import annotations
@@ -15,12 +15,11 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
-from tauri_assistant import db
-from tauri_assistant.ingest import catalog
 from tauri_assistant.ingest.chunking import Pipeline, build_chunker, get_token_counter
-from tauri_assistant.ingest.embedding import CachedEmbedder
+from tauri_assistant.ingest.embedding import Embedder
 from tauri_assistant.ingest.types import Chunk, Document
 from tauri_assistant.ingest.variant import Variant
+from tauri_assistant.repository import RunStats, get_repository
 from tauri_assistant.sources import get_sources
 
 WRITE_BATCH = 256
@@ -29,7 +28,7 @@ WRITE_BATCH = 256
 @dataclass
 class IngestReport:
     variant: Variant
-    stats: catalog.RunStats = field(default_factory=catalog.RunStats)
+    stats: RunStats = field(default_factory=RunStats)
     token_counts: list[int] = field(default_factory=list)
 
     def token_stats(self) -> dict[str, float]:
@@ -107,81 +106,67 @@ def chunk_documents(
 def ingest(
     sources: list[str],
     variant: Variant | None = None,
-    full: bool = False,
-    use_cache: bool = True,
+    force: bool = False,
 ) -> IngestReport:
-    variant = variant or Variant.from_settings()
+    repository = get_repository()
     counter = get_token_counter()
     chunker = build_chunker(counter=counter)
+
+    instances = get_sources(sources)
+    current_shas = {source.name: source.git_sha for source in instances}
+    variant = variant or Variant.from_settings(current_shas)
     report = IngestReport(variant=variant)
 
     logger.info(f"Variant {variant.describe()} -> {variant.collection_name}")
-    catalog.register_variant(variant, variant.as_dict())
 
-    previous_shas = {} if full else catalog.get_source_shas(variant.fingerprint)
-    instances = get_sources(sources)
-    current_shas = {source.name: source.git_sha for source in instances}
-    run_id = catalog.start_run(variant.fingerprint, repo_shas=current_shas)
+    store = repository.embedding(variant)
+    if not force and store.exists():
+        logger.info(f"{variant.collection_name} already built at this sha/config; skipping")
+        return report
 
-    to_reindex = [
-        source for source in instances if current_shas[source.name] != previous_shas.get(source.name)
-    ]
-    logger.info(
-        f"{len(instances)} source(s): {len(to_reindex)} changed (by git sha), "
-        f"{len(instances) - len(to_reindex)} unchanged"
-    )
+    repository.variant.register(variant, variant.as_dict())
+    run_id = repository.ingest_run.start(variant.fingerprint, repo_shas=current_shas)
 
-    embedder = CachedEmbedder(variant.embedding_model, use_cache=use_cache)
+    embedder = Embedder(variant.embedding_model)
     docs_total = 0
     written = 0
-    deleted = 0
     elapsed = 0.0
 
-    for source in to_reindex:
+    for source in instances:
         documents = dedupe_document_ids(source.iter_documents())
         docs_total += len(documents)
-        logger.info(f"{source.name}: {len(documents)} documents, reindexing")
+        logger.info(f"{source.name}: {len(documents)} documents")
 
-        deleted += db.delete_source(variant, source.name)
-        catalog.drop_source_parents(variant.fingerprint, source.name)
+        if not documents:
+            continue
 
-        if documents:
-            chunks, parents = chunk_documents(documents, chunker)
-            catalog.save_parents(variant.fingerprint, parents)
-            report.token_counts.extend(int(c.metadata.get("token_count", 0)) for c in chunks)
+        chunks, parents = chunk_documents(documents, chunker)
+        repository.parent_section.save(variant.fingerprint, parents)
+        report.token_counts.extend(int(c.metadata.get("token_count", 0)) for c in chunks)
 
-            oversized = [c for c in chunks if c.metadata.get("token_count", 0) > counter.budget]
-            if oversized:
-                # The post-processors are supposed to make this impossible; if it
-                # happens, the embedding model would silently truncate instead.
-                raise RuntimeError(
-                    f"{len(oversized)} chunk(s) exceed the {counter.budget}-token budget, "
-                    f"largest {max(c.metadata['token_count'] for c in oversized)}"
-                )
+        oversized = [c for c in chunks if c.metadata.get("token_count", 0) > counter.budget]
+        if oversized:
+            # The post-processors are supposed to make this impossible; if it
+            # happens, the embedding model would silently truncate instead.
+            raise RuntimeError(
+                f"{len(oversized)} chunk(s) exceed the {counter.budget}-token budget, "
+                f"largest {max(c.metadata['token_count'] for c in oversized)}"
+            )
 
-            for start in range(0, len(chunks), WRITE_BATCH):
-                batch = chunks[start : start + WRITE_BATCH]
-                began = time.perf_counter()
-                vectors = embedder.embed_documents([c.text for c in batch])
-                elapsed += time.perf_counter() - began
-                written += db.upsert_chunks(variant, batch, vectors)
-                logger.info(f"  embedded {min(start + WRITE_BATCH, len(chunks))}/{len(chunks)} chunks")
+        for start in range(0, len(chunks), WRITE_BATCH):
+            batch = chunks[start : start + WRITE_BATCH]
+            began = time.perf_counter()
+            vectors = embedder.embed_documents([c.text for c in batch])
+            elapsed += time.perf_counter() - began
+            written += store.upsert_chunks(batch, vectors)
+            logger.info(f"  embedded {min(start + WRITE_BATCH, len(chunks))}/{len(chunks)} chunks")
 
-        catalog.set_source_sha(variant.fingerprint, source.name, current_shas[source.name])
-
-    report.stats = catalog.RunStats(
+    report.stats = RunStats(
         docs_total=docs_total,
         sources_total=len(instances),
-        sources_reindexed=len(to_reindex),
         chunks_written=written,
-        chunks_deleted=deleted,
         embed_seconds=round(elapsed, 2),
-        cache_hits=embedder.hits,
-        cache_misses=embedder.misses,
     )
-    catalog.finish_run(run_id, report.stats, report.token_stats())
-    logger.info(
-        f"Done: {written} chunks written, {deleted} deleted, "
-        f"{embedder.hits} cache hits / {embedder.misses} misses, {elapsed:.1f}s embedding"
-    )
+    repository.ingest_run.finish(run_id, report.stats, report.token_stats())
+    logger.info(f"Done: {written} chunks written, {elapsed:.1f}s embedding")
     return report

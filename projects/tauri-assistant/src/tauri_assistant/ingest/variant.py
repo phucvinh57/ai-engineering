@@ -5,9 +5,12 @@ config). Hashing those inputs means:
 
 - changing the chunker or embedding model lands in a *different* collection,
   so two experiments can never contaminate each other;
-- leaving them alone lands in the *same* collection, so a repo update is an
-  incremental diff rather than a rebuild;
-- every measurement can be keyed back to the exact config that produced it.
+- a source's git sha moving lands in a *different* collection too, so a repo
+  update is a fresh build rather than a patch to one that's already live;
+- leaving everything alone resolves to the *same* collection, so re-running
+  ingest against an unchanged corpus and config is a cheap no-op;
+- every measurement can be keyed back to the exact config and corpus state
+  that produced it.
 """
 
 from __future__ import annotations
@@ -43,9 +46,13 @@ class Variant:
     embedding_model: str
     chunking: Mapping[str, Any]
     sources: Mapping[str, Any]
+    source_shas: Mapping[str, str]
+    """`source name -> git sha`, as of this build. Part of the fingerprint: a
+    source moving to a new sha is a corpus change, not something to patch a
+    live collection in place for."""
 
     @classmethod
-    def from_settings(cls, cfg: Settings | None = None) -> Variant:
+    def from_settings(cls, source_shas: Mapping[str, str], cfg: Settings | None = None) -> Variant:
         cfg = cfg or settings
         return cls(
             embedding_model=cfg.embedding.model,
@@ -59,6 +66,7 @@ class Variant:
                 "include_translations": cfg.chunking.include_translations,
                 "exclude_globs": sorted(cfg.chunking.exclude_globs),
             },
+            source_shas=dict(sorted(source_shas.items())),
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -66,6 +74,7 @@ class Variant:
             "embedding_model": self.embedding_model,
             "chunking": dict(self.chunking),
             "sources": dict(self.sources),
+            "source_shas": dict(self.source_shas),
         }
 
     @property

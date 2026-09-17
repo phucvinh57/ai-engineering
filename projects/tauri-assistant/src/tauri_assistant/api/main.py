@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from loguru import logger
 
-from tauri_assistant.api.routes import routers
+from tauri_assistant.api.routes import router
 from tauri_assistant.ingest.chunking.tokens import get_token_counter
 from tauri_assistant.logs import configure_logger
 
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Tauri assistant", lifespan=lifespan)
-app.include_router(routers)
+app.include_router(router)
 
 
 @app.get("/health", tags=["Health"])

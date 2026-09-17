@@ -5,8 +5,8 @@ from __future__ import annotations
 import chromadb
 import pytest
 
-from tauri_assistant.db import to_metadata
 from tauri_assistant.ingest.types import Chunk
+from tauri_assistant.repository.chroma_sqlite import _to_metadata as to_metadata
 
 
 def chunk(**overrides) -> Chunk:
