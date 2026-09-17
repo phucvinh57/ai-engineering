@@ -1,15 +1,3 @@
-"""The repository interface: everything ingest and the API depend on.
-
-Ingest and query code should only ever see `Repository`, never the chromadb
-or sqlite objects behind it. That keeps the vector store and the metadata
-store swappable together, as one unit, without touching a single call site.
-
-The interface is grouped by concern rather than left flat: `repo.embedding(variant)`
-opens the vector store for one variant's collection, and `repo.variant`,
-`repo.ingest_run`, `repo.parent_section`, `repo.eval_run` each front one
-SQLite table. Each name mirrors the peewee model it wraps.
-"""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -91,7 +79,7 @@ class EmbeddingNamespace(ABC):
 
 class VariantCatalog(ABC):
     @abstractmethod
-    def register(self, variant: Variant, config: dict[str, Any]) -> None: ...
+    def register(self, variant: Variant) -> None: ...
 
 
 class IngestRunCatalog(ABC):

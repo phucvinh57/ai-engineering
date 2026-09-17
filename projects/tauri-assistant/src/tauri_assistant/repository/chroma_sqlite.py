@@ -62,7 +62,6 @@ def _to_metadata(chunk: Chunk) -> dict[str, Any]:
         "kind": str(chunk.metadata.get("kind", "")),
         "chunk_index": int(chunk.metadata.get("chunk_index", 0)),
         "token_count": int(chunk.metadata.get("token_count", 0)),
-        "strategy": str(chunk.metadata.get("strategy", "")),
     }
     # Writing None here raises TypeError from chromadb rather than storing a
     # null, so absent values are left out entirely.
@@ -233,11 +232,11 @@ class _SqliteVariantCatalog(VariantCatalog):
     def __init__(self, repo: ChromaSqliteRepository) -> None:
         self._repo = repo
 
-    def register(self, variant: Variant, config: dict[str, Any]) -> None:
+    def register(self, variant: Variant) -> None:
         self._repo._catalog()
         VariantRecord.insert(
             fingerprint=variant.fingerprint,
-            config_json=json.dumps(config, sort_keys=True),
+            config_json=json.dumps(variant.as_dict(), sort_keys=True),
             embedding_model=variant.embedding_model,
             strategy=str(variant.chunking.get("strategy", "")),
             collection_name=variant.collection_name,

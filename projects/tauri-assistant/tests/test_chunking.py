@@ -111,14 +111,15 @@ class TestStrategyContract:
 
     @pytest.mark.parametrize("strategy", sorted(CHUNKERS))
     def test_all_strategies_produce_valid_chunks(self, strategy, counter, document):
-        chunks = build_chunker(strategy, counter=counter).split(document)
+        pipeline = build_chunker(strategy, counter=counter)
+        assert pipeline.name == strategy
+        chunks = pipeline.split(document)
         assert chunks
         for chunk in chunks:
             assert chunk.text.strip()
             assert chunk.document_id == document.id
             assert chunk.id
             assert counter.count(chunk.text) <= counter.budget
-            assert chunk.metadata["strategy"] == strategy
 
     @pytest.mark.parametrize("strategy", sorted(CHUNKERS))
     def test_chunk_index_is_contiguous(self, strategy, counter, document):

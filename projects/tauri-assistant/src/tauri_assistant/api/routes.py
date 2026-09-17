@@ -35,7 +35,7 @@ def _run_fetch() -> None:
 
 def _run_ingest(source: list[str], force: bool) -> None:
     try:
-        ingest(sources=source, force=force)
+        ingest(source_names=source, force=force)
     except Exception:
         logger.exception("Ingest failed")
     finally:

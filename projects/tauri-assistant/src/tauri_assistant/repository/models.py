@@ -1,11 +1,3 @@
-"""Peewee models for the SQLite catalog.
-
-`database_proxy` is rebound to a fresh `SqliteDatabase` per `Repository`
-instance (see `ChromaSqliteRepository._catalog`), which is what lets tests
-point the catalog at a temp directory without any module-level state leaking
-between runs.
-"""
-
 from __future__ import annotations
 
 import peewee as pw

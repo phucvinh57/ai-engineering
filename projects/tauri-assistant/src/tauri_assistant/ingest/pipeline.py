@@ -104,35 +104,35 @@ def chunk_documents(
 
 
 def ingest(
-    sources: list[str],
+    source_names: list[str],
     variant: Variant | None = None,
     force: bool = False,
 ) -> IngestReport:
-    repository = get_repository()
+    db = get_repository()
     counter = get_token_counter()
     chunker = build_chunker(counter=counter)
 
-    instances = get_sources(sources)
-    current_shas = {source.name: source.git_sha for source in instances}
+    sources = get_sources(source_names)
+    current_shas = {s.name: s.git_sha for s in sources}
     variant = variant or Variant.from_settings(current_shas)
     report = IngestReport(variant=variant)
 
     logger.info(f"Variant {variant.describe()} -> {variant.collection_name}")
 
-    store = repository.embedding(variant)
+    store = db.embedding(variant)
     if not force and store.exists():
         logger.info(f"{variant.collection_name} already built at this sha/config; skipping")
         return report
 
-    repository.variant.register(variant, variant.as_dict())
-    run_id = repository.ingest_run.start(variant.fingerprint, repo_shas=current_shas)
+    db.variant.register(variant)
+    run_id = db.ingest_run.start(variant.fingerprint, repo_shas=current_shas)
 
     embedder = Embedder(variant.embedding_model)
     docs_total = 0
     written = 0
     elapsed = 0.0
 
-    for source in instances:
+    for source in sources:
         documents = dedupe_document_ids(source.iter_documents())
         docs_total += len(documents)
         logger.info(f"{source.name}: {len(documents)} documents")
@@ -141,7 +141,7 @@ def ingest(
             continue
 
         chunks, parents = chunk_documents(documents, chunker)
-        repository.parent_section.save(variant.fingerprint, parents)
+        db.parent_section.save(variant.fingerprint, parents)
         report.token_counts.extend(int(c.metadata.get("token_count", 0)) for c in chunks)
 
         oversized = [c for c in chunks if c.metadata.get("token_count", 0) > counter.budget]
@@ -163,10 +163,10 @@ def ingest(
 
     report.stats = RunStats(
         docs_total=docs_total,
-        sources_total=len(instances),
+        sources_total=len(sources),
         chunks_written=written,
         embed_seconds=round(elapsed, 2),
     )
-    repository.ingest_run.finish(run_id, report.stats, report.token_stats())
+    db.ingest_run.finish(run_id, report.stats, report.token_stats())
     logger.info(f"Done: {written} chunks written, {elapsed:.1f}s embedding")
     return report

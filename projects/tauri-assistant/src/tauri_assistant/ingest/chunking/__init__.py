@@ -40,17 +40,16 @@ def build_chunker(
     cfg: ChunkingSettings | None = None,
     counter: TokenCounter | None = None,
 ) -> Pipeline:
-    """Assemble a strategy with the post-processors every strategy shares."""
     cfg = cfg or settings.chunking
     counter = counter or get_token_counter()
-    name = strategy or cfg.strategy
+    strategy = strategy or cfg.strategy
 
-    if name not in CHUNKERS:
+    if strategy not in CHUNKERS:
         known = ", ".join(sorted(CHUNKERS))
-        raise ValueError(f"Unknown chunking strategy {name!r}. Available: {known}")
+        raise ValueError(f"Unknown chunking strategy {strategy!r}. Available: {known}")
 
     return Pipeline(
-        chunker=CHUNKERS[name](cfg, counter),
+        chunker=CHUNKERS[strategy](cfg, counter),
         steps=[
             # Order matters: merge stubs while they are still whole sections,
             # capture parents before anything is cut, then enforce the budget.

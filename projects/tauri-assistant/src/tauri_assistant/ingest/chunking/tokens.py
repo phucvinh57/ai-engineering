@@ -49,7 +49,7 @@ def _model_max_seq_length(model_name: str) -> int | None:
         return None
 
 
-class HFTokenCounter:
+class HuggingFaceTokenCounter:
     def __init__(self, model_name: str, max_tokens: int) -> None:
 
         self._tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -83,7 +83,7 @@ class HFTokenCounter:
 
 @lru_cache(maxsize=4)
 def get_token_counter(model_name: str | None = None, max_tokens: int | None = None) -> TokenCounter:
-    return HFTokenCounter(
+    return HuggingFaceTokenCounter(
         model_name or settings.embedding.model,
         max_tokens or settings.chunking.max_tokens,
     )

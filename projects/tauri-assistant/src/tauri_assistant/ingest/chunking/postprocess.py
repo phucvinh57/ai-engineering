@@ -181,7 +181,6 @@ class Pipeline:
                 metadata={
                     **c.metadata,
                     "chunk_index": i,
-                    "strategy": self._chunker.name,
                     "token_count": self._counter.count(c.text),
                 },
             )

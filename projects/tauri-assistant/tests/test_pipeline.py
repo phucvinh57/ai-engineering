@@ -85,7 +85,7 @@ def variant() -> Variant:
 
 
 def run(variant, **kwargs):
-    return pipeline.ingest(sources=["fake"], variant=variant, **kwargs)
+    return pipeline.ingest(source_names=["fake"], variant=variant, **kwargs)
 
 
 class TestVariantSkipping:
@@ -112,9 +112,9 @@ class TestVariantSkipping:
 
     def test_a_new_source_sha_lands_in_a_different_collection(self, isolated):
         FakeSource.documents = [make_doc("a", "alpha")]
-        first = pipeline.ingest(sources=["fake"])
+        first = pipeline.ingest(source_names=["fake"])
         FakeSource.git_sha = "sha-2"
-        second = pipeline.ingest(sources=["fake"])
+        second = pipeline.ingest(source_names=["fake"])
         assert first.variant.collection_name != second.variant.collection_name
         assert document_ids(first.variant) == {"fake:a"}
         assert document_ids(second.variant) == {"fake:a"}
