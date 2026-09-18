@@ -15,6 +15,7 @@ from pathlib import Path
 from loguru import logger
 
 from tauri_assistant.ingest.types import Document
+from tauri_assistant.settings import ChunkingSettings
 from tauri_assistant.sources.base import Source
 
 PLUGINS_ROOT = "plugins"
@@ -76,7 +77,8 @@ class PluginPermissionsSource(Source):
     repo = "plugins-workspace"
     strategy = "record"
 
-    def iter_documents(self) -> Iterator[Document]:
+    def iter_documents(self, cfg: ChunkingSettings | None = None) -> Iterator[Document]:
+        # No per-source filtering knobs -- `cfg` only matters to tauri-docs.
         root = self.path / PLUGINS_ROOT
         if not root.is_dir():
             logger.warning(f"{root} missing -- run `tauri-assistant sync` first")

@@ -201,21 +201,25 @@ invariant** rather than trusted to each of four parsers independently.
 
 ## 12. Ground truth must be chunk-agnostic
 
-**Decision (design only — `eval/` is not built).** `eval_run` is shaped for it, and
-golden items must be expressed as `question -> (document_id, heading_path substring)`.
+**Decision.** Golden items (`eval/dataset.py: QuestionItem`) are expressed as
+`question -> (document_id, heading_path substring)`, never a chunk id.
 
-**Why it is recorded now.** Expressing ground truth as chunk ids would invalidate the
-entire dataset the first time two chunkers are compared — which is the whole purpose of
-the harness. This is cheap to get right up front and painful to retrofit, so it is
-written down before the dataset exists.
+**Why.** Expressing ground truth as chunk ids would invalidate the entire dataset the
+first time two chunkers are compared — which is the whole purpose of the harness. This
+was written down before the dataset existed, specifically so it couldn't be gotten
+wrong once building it got underway.
 
 ---
 
 ## Open items
 
-- **`eval/` is not implemented.** The cost side of measurement works (chunk counts,
-  token distribution, embed seconds, cache hit rate, ingest history). The quality side
-  — golden set, Hit Rate/MRR/Recall@k, sweep runner — does not exist yet.
+- **`eval/` sweep runner exists** (`matrix.py`, `dataset.py`, `generate.py`,
+  `metrics.py`, `runner.py`, CLI in `__main__.py`): four variants, an LLM-generated
+  and filtered golden set (`evalset/questions.jsonl`), Hit Rate/MRR/Precision@k +
+  retrieval latency + context-token cost, run as one Langfuse experiment per variant.
+  Not yet in the runner: generation-quality metrics (Faithfulness, Answer Relevancy) —
+  retrieval metrics don't vary the chat model, so they came first; see
+  `eval/runner.py`'s module docstring for what a second pass would add.
 - **`.env` pins `all-MiniLM-L6-v2`**, which correctly overrides the `BAAI/bge-m3` code
   default. All verification above ran on MiniLM. Switching costs a ~2.2GB download and
   buys an 8192-token budget, which would change nearly every decision's numbers above

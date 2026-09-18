@@ -5,8 +5,9 @@ source and plugin ecosystem. It reads four upstream sources off local git clones
 normalizes them into one document shape, chunks them with a swappable strategy, and
 stores the result in Chroma.
 
-Fetching and ingesting are actions on a small FastAPI service, not a CLI. The
-chat/web layers described in earlier revisions of this file do not exist yet.
+Fetching and ingesting are actions on a small FastAPI service, not a CLI. A `/chat`
+endpoint retrieves from the currently ingested collection and completes against an
+OpenAI-compatible endpoint (Ollama by default); a web layer does not exist yet.
 
 [DECISIONS.md](DECISIONS.md) records why the pipeline is shaped this way — the
 measurements behind the chunking default, the token-budget traps, and the rejected
@@ -39,6 +40,26 @@ curl -X POST localhost:8000/ingest -H 'content-type: application/json' -d '{}'
 curl -X POST localhost:8000/ingest -d '{"source": ["tauri-docs"]}'   # one source
 curl -X POST localhost:8000/ingest -d '{"full": true}'               # re-embed everything
 ```
+
+## Chat
+
+`/chat` retrieves from whatever collection matches the *current* config and source
+shas (the same variant `/ingest` would build right now — see
+[Comparing choices](#comparing-choices)) and streams a grounded reply from
+`CHAT_BASE_URL`/`CHAT_MODEL`. It 409s if that variant hasn't been ingested yet.
+
+```sh
+curl -X POST localhost:8000/chat -H 'content-type: application/json' -d '{
+  "messages": [{"role": "user", "content": "How do I call a Rust command from the frontend?"}]
+}'
+```
+
+The response body is newline-delimited JSON: one `{"type": "sources", ...}` line with
+the retrieved passages (`document_id`, `heading_path`, `url`, `score`), then any number
+of `{"type": "delta", "text": ...}` lines as the model streams, then a final
+`{"type": "done", "usage": ...}` (or `{"type": "error", ...}` if the chat backend
+fails mid-stream). `messages` follows the OpenAI shape so multi-turn history can be
+passed straight through; only the last (user) message is used as the retrieval query.
 
 ## Sources
 
@@ -118,21 +139,54 @@ Vectors are cached on `(model, sha256(text))` in `data/catalog.db`, so a variant
 re-embeds only what genuinely differs — in practice a 99% hit rate when only chunking
 parameters move.
 
-### Adding a golden set
+## Evaluating variants
 
-Retrieval quality has to be scored against ground truth expressed as
+Retrieval quality is scored against ground truth expressed as
 `question -> (document_id, heading_path substring)` — **never chunk ids**, which change
 whenever chunking does and would silently invalidate the dataset the moment you compared
-two chunkers. `eval_run` in the catalog is shaped for this; the dataset itself is not
-written yet.
+two chunkers.
+
+`eval/matrix.py` fixes four variants to compare (embedding model / strategy / max
+tokens), holding the corpus (source git shas) constant across all of them:
+
+| Label | Embedding model | Strategy | Max tokens |
+|---|---|---|---|
+| `bge-m3-heading-1024` | `BAAI/bge-m3` | `heading` | 1024 |
+| `bge-m3-fixed-1024` | `BAAI/bge-m3` | `fixed` | 1024 |
+| `bge-m3-heading-512` | `BAAI/bge-m3` | `heading` | 512 |
+| `minilm-heading-256` | `all-MiniLM-L6-v2` | `heading` | 256 |
+
+`eval/generate.py` samples chunks from the baseline collection, generates one
+question per chunk with a local LLM (`EVAL_GENERATOR_MODEL`), and filters out
+leaked/unanswerable/unretrievable questions before they land in
+`evalset/questions.jsonl` (committed — this is a versioned asset, not derived
+output). `eval/runner.py` uploads that set to a Langfuse dataset once, then runs one
+[experiment](https://langfuse.com/docs/evaluation/experiments/experiments-via-sdk) per
+variant — Hit Rate/MRR/Precision@k, retrieval latency, and context token cost — so
+they compare side by side in the Langfuse UI, timestamped for tracking drift over
+time as the upstream repos move.
+
+```sh
+uv run python -m tauri_assistant.eval matrix-ingest      # build the 4 collections
+uv run python -m tauri_assistant.eval generate            # sample + generate + filter questions
+uv run python -m tauri_assistant.eval verify               # drop questions no variant can retrieve
+uv run python -m tauri_assistant.eval run                  # upload dataset, run 1 experiment/variant
+```
+
+Needs `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` set (see [Telemetry](#telemetry) and
+`infra/langfuse/` at the repo root for a local, self-hosted stack).
 
 ## Layout
 
 ```
 src/tauri_assistant/
 ├── settings.py              pydantic-settings groups: init > env > .env > config.toml
+├── telemetry.py             Langfuse -- the only module that imports it
 ├── db.py                    Chroma, addressed by variant fingerprint
-├── api/                     FastAPI app: fetch/ingest as background-triggered actions
+├── api/                     FastAPI app: fetch/ingest/chat routes
+├── chat/                    retrieval + turn assembly + OpenAI-compatible completion
+│   └── turn.py              prepare_turn() -- shared by /chat and eval/runner.py
+├── eval/                    variant matrix, golden set, Langfuse experiment runner
 ├── sources/                 one normalizer per upstream source -> Document
 └── ingest/
     ├── types.py             Document / Chunk -- the stable contract
@@ -155,8 +209,15 @@ texts, run history, eval results, and the embedding cache.
 
 ## Telemetry (optional)
 
-Langfuse, disabled unless `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` are set. Not
-currently wired into any code path.
+Langfuse, disabled unless `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` are set
+(`telemetry.py` -- the only module that imports `langfuse`; every other module
+degrades to a no-op automatically). When active, each `/chat` request gets one trace
+(root span "chat", a "retrieve" child, a "chat" generation) with the trace id
+returned in the `sources` and `done` events, and `eval/runner.py` runs each
+variant's golden-set questions as a Langfuse experiment (see
+[Evaluating variants](#evaluating-variants)). `infra/langfuse/` at the repo root has
+a self-hosted docker-compose stack; Langfuse Cloud works too by pointing
+`LANGFUSE_BASE_URL` at it instead.
 
 ## Tests
 

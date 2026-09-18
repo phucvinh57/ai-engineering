@@ -97,11 +97,26 @@ class LangfuseSettings(_GroupSettings):
     enabled: bool = True
     release: str | None = None
     sample_rate: float = 1.0
+    # Bounds `Langfuse(timeout=...)` -- flush/shutdown must not hang Ctrl-C
+    # (or an eval sweep's exit) waiting on a Langfuse host that's down.
+    timeout_seconds: int = 5
     debug: bool = False
 
     @property
     def active(self) -> bool:
         return bool(self.enabled and self.public_key and self.secret_key)
+
+
+class EvalSettings(_GroupSettings):
+    model_config = SettingsConfigDict(env_prefix="EVAL_", toml_table_header=("eval",))
+    # Both default to the same local Ollama model, deliberately *not*
+    # `chat.model` -- judge and generator must stay independent of the model
+    # under test so the system never grades its own homework.
+    judge_model: str = "qwen2.5:7b-instruct"
+    generator_model: str = "qwen2.5:7b-instruct"
+    dataset_name: str = "tauri-golden-v1"
+    top_k: int = 6
+    question_count: int = 250
 
 
 @dataclass(frozen=True)
@@ -111,6 +126,7 @@ class Settings:
     chunking: ChunkingSettings = field(default_factory=ChunkingSettings)
     paths: PathSettings = field(default_factory=PathSettings)
     langfuse: LangfuseSettings = field(default_factory=LangfuseSettings)
+    eval: EvalSettings = field(default_factory=EvalSettings)
 
 
 settings = Settings()

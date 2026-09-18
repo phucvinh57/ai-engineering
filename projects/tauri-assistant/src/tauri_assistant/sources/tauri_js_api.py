@@ -24,6 +24,7 @@ from loguru import logger
 from tree_sitter import Language, Node, Parser
 
 from tauri_assistant.ingest.types import Document
+from tauri_assistant.settings import ChunkingSettings
 from tauri_assistant.sources.base import Source
 
 API_ROOT = "packages/api/src"
@@ -201,7 +202,8 @@ class TauriJsApiSource(Source):
     repo = "tauri"
     strategy = "record"
 
-    def iter_documents(self) -> Iterator[Document]:
+    def iter_documents(self, cfg: ChunkingSettings | None = None) -> Iterator[Document]:
+        # No per-source filtering knobs -- `cfg` only matters to tauri-docs.
         root = self.path / API_ROOT
         if not root.is_dir():
             logger.warning(f"{root} missing")

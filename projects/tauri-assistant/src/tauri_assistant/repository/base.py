@@ -39,6 +39,13 @@ class Hit:
 
 
 @dataclass(frozen=True, slots=True)
+class StoredChunk:
+    id: str
+    text: str
+    metadata: Mapping[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class RunStats:
     docs_total: int = 0
     sources_total: int = 0
@@ -56,6 +63,12 @@ class EmbeddingStore(ABC):
 
     @abstractmethod
     def query(self, embedding: Sequence[float], k: int = 5, where: dict | None = None) -> list[Hit]: ...
+
+    @abstractmethod
+    def sample(self, where: dict | None = None, limit: int = 5000) -> list[StoredChunk]:
+        """Raw stored chunks, no similarity search -- for eval tooling that
+        needs to read the corpus itself (e.g. sampling chunks to generate
+        golden questions from), not query it."""
 
     @abstractmethod
     def exists(self) -> bool: ...
@@ -81,6 +94,13 @@ class VariantCatalog(ABC):
     @abstractmethod
     def register(self, variant: Variant) -> None: ...
 
+    @abstractmethod
+    def list(self) -> list[Mapping[str, Any]]:
+        """Every registered variant, most recently created first."""
+
+    @abstractmethod
+    def get(self, fingerprint: str) -> Mapping[str, Any] | None: ...
+
 
 class IngestRunCatalog(ABC):
     @abstractmethod
@@ -91,6 +111,10 @@ class IngestRunCatalog(ABC):
 
     @abstractmethod
     def latest(self, limit: int = 20) -> list[Mapping[str, Any]]: ...
+
+    @abstractmethod
+    def for_variant(self, fingerprint: str, limit: int = 20) -> list[Mapping[str, Any]]:
+        """One variant's own run history, most recently started first."""
 
 
 class ParentSectionCatalog(ABC):

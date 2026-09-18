@@ -108,13 +108,19 @@ def ingest(
     force: bool = False,
 ) -> IngestReport:
     db = get_repository()
-    counter = get_token_counter()
-    chunker = build_chunker(counter=counter)
 
     sources = get_sources()
     current_shas = {s.name: s.git_sha for s in sources}
     variant = variant or Variant.from_settings(current_shas)
     report = IngestReport(variant=variant)
+
+    # Build the counter/chunker from *this variant's* config, not the
+    # process-global settings -- otherwise every variant would be chunked
+    # identically regardless of what it was asked to build (see
+    # `Variant.chunking_settings`).
+    cfg = variant.chunking_settings()
+    counter = get_token_counter(variant.embedding_model, cfg.max_tokens)
+    chunker = build_chunker(cfg.strategy, cfg, counter)
 
     logger.info(f"Variant {variant.describe()} -> {variant.collection_name}")
 
@@ -132,7 +138,7 @@ def ingest(
     elapsed = 0.0
 
     for source in sources:
-        documents = dedupe_document_ids(source.iter_documents())
+        documents = dedupe_document_ids(source.iter_documents(cfg))
         docs_total += len(documents)
         logger.info(f"{source.name}: {len(documents)} documents")
 

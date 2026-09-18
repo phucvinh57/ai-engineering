@@ -23,6 +23,7 @@ import peewee as pw
 from chromadb.api import ClientAPI
 from chromadb.api.models.Collection import Collection
 from loguru import logger
+from playhouse.shortcuts import model_to_dict
 
 from tauri_assistant.ingest.types import Chunk
 from tauri_assistant.ingest.variant import Variant
@@ -37,6 +38,7 @@ from tauri_assistant.repository.base import (
     Repository,
     RunStats,
     Stats,
+    StoredChunk,
     VariantCatalog,
 )
 from tauri_assistant.repository.models import (
@@ -158,6 +160,17 @@ class _ChromaEmbeddingStore(EmbeddingStore):
             hits.append(Hit(text=doc, metadata=metadata, score=1.0 - float(distance)))
         return hits
 
+    def sample(self, where: dict | None = None, limit: int = 5000) -> list[StoredChunk]:
+        collection = self._repo._collection(self._variant, create=False)
+        batch = collection.get(where=where, limit=limit, include=["documents", "metadatas"])
+        ids = batch.get("ids") or []
+        documents = batch.get("documents") or []
+        metadatas = batch.get("metadatas") or []
+        return [
+            StoredChunk(id=i, text=doc, metadata=meta)
+            for i, doc, meta in zip(ids, documents, metadatas, strict=True)
+        ]
+
     def exists(self) -> bool:
         """Whether this exact (config, corpus-sha) variant has already been built.
 
@@ -243,6 +256,16 @@ class _SqliteVariantCatalog(VariantCatalog):
             created_at=time.time(),
         ).on_conflict_ignore().execute()
 
+    def list(self) -> list[Mapping[str, Any]]:
+        self._repo._catalog()
+        query = VariantRecord.select().order_by(VariantRecord.created_at.desc())
+        return list(query.dicts())
+
+    def get(self, fingerprint: str) -> Mapping[str, Any] | None:
+        self._repo._catalog()
+        row = VariantRecord.get_or_none(VariantRecord.fingerprint == fingerprint)
+        return None if row is None else model_to_dict(row)
+
 
 class _SqliteIngestRunCatalog(IngestRunCatalog):
     def __init__(self, repo: ChromaSqliteRepository) -> None:
@@ -278,6 +301,16 @@ class _SqliteIngestRunCatalog(IngestRunCatalog):
                 pw.JOIN.LEFT_OUTER,
                 on=(IngestRun.fingerprint == VariantRecord.fingerprint),
             )
+            .order_by(IngestRun.started_at.desc())
+            .limit(limit)
+        )
+        return list(query.dicts())
+
+    def for_variant(self, fingerprint: str, limit: int = 20) -> list[Mapping[str, Any]]:
+        self._repo._catalog()
+        query = (
+            IngestRun.select()
+            .where(IngestRun.fingerprint == fingerprint)
             .order_by(IngestRun.started_at.desc())
             .limit(limit)
         )

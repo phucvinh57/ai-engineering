@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tauri assistant</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Tauri assistant</h1>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="chat">Chat</button>
+      <button class="tab-btn" data-tab="search">Search</button>
+      <button class="tab-btn" data-tab="database">Database</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="chat" class="tab-panel active">
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="input-row">
+        <textarea id="chat-input" placeholder="Ask about Tauri…" rows="2" required></textarea>
+        <button type="submit" id="chat-send">Send</button>
+      </form>
+    </section>
+
+    <section id="search" class="tab-panel">
+      <form id="search-form" class="input-row">
+        <input id="search-input" type="text" placeholder="Search the corpus…" required />
+        <input id="search-k" type="number" min="1" max="50" value="6" title="Results" />
+        <button type="submit" id="search-send">Search</button>
+      </form>
+      <div id="search-results" class="search-results"></div>
+    </section>
+
+    <section id="database" class="tab-panel">
+      <div class="db-actions">
+        <button id="fetch-btn" type="button">Fetch sources</button>
+        <button id="ingest-btn" type="button">Ingest current variant</button>
+        <label class="force-check"><input type="checkbox" id="ingest-force" /> force</label>
+        <button id="refresh-variants-btn" type="button" class="ghost-btn">Refresh</button>
+        <span id="db-status" class="db-status"></span>
+      </div>
+      <div id="variant-list" class="variant-list"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

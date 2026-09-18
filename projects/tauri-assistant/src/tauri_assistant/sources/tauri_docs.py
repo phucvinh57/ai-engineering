@@ -18,7 +18,7 @@ from loguru import logger
 
 from tauri_assistant.ingest.chunking.base import iter_lines_outside_fences
 from tauri_assistant.ingest.types import Document
-from tauri_assistant.settings import settings
+from tauri_assistant.settings import ChunkingSettings, settings
 from tauri_assistant.sources.base import Source
 
 CONTENT_ROOT = "src/content/docs"
@@ -169,8 +169,8 @@ class TauriDocsSource(Source):
     repo = "tauri-docs"
     strategy = "heading"
 
-    def iter_documents(self) -> Iterator[Document]:
-        cfg = settings.chunking
+    def iter_documents(self, cfg: ChunkingSettings | None = None) -> Iterator[Document]:
+        cfg = cfg or settings.chunking
         root = self.path / CONTENT_ROOT
         if not root.is_dir():
             logger.warning(f"{root} missing")

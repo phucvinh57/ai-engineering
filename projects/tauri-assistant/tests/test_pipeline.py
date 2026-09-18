@@ -39,7 +39,7 @@ class FakeSource:
     documents: list[Document] = []
     git_sha = "sha-1"
 
-    def iter_documents(self):
+    def iter_documents(self, cfg=None):
         yield from self.documents
 
 
@@ -126,7 +126,7 @@ class TestVariantIsolation:
         run(variant)
         other = Variant(
             embedding_model="fake",
-            chunking={"strategy": "whole", "max_tokens": 50, "min_tokens": 0},
+            chunking={"strategy": "fixed", "max_tokens": 50, "min_tokens": 0},
             sources={},
             source_shas={},
         )
@@ -143,7 +143,7 @@ class TestVariantIsolation:
 
         other = Variant(
             embedding_model="fake",
-            chunking={"strategy": "whole", "max_tokens": 50, "min_tokens": 0},
+            chunking={"strategy": "fixed", "max_tokens": 50, "min_tokens": 0},
             sources={},
             source_shas={},
         )

@@ -44,4 +44,16 @@ environment = "development"
 enabled = true
 # release = ""
 # sample_rate = 1.0
+# timeout_seconds = 5
 # debug = false
+
+# --- Eval: variant matrix + golden set + Langfuse experiments ---
+# (uv run python -m tauri_assistant.eval --help). judge_model/generator_model
+# default away from [chat].model on purpose -- the system should never grade
+# its own homework.
+[eval]
+judge_model = "qwen2.5:7b-instruct"
+generator_model = "qwen2.5:7b-instruct"
+dataset_name = "tauri-golden-v1"
+top_k = 6
+question_count = 250

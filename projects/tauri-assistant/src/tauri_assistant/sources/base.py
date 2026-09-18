@@ -9,7 +9,7 @@ from pathlib import Path
 from git import Repo
 
 from tauri_assistant.ingest.types import Document
-from tauri_assistant.settings import settings
+from tauri_assistant.settings import ChunkingSettings, settings
 
 
 class Source(ABC):
@@ -18,7 +18,13 @@ class Source(ABC):
     strategy: str
 
     @abstractmethod
-    def iter_documents(self) -> Iterator[Document]: ...
+    def iter_documents(self, cfg: ChunkingSettings | None = None) -> Iterator[Document]:
+        """`cfg` carries the filtering knobs (`include_translations`,
+        `exclude_globs`) that vary per variant. Defaults to global settings so
+        the live `/fetch` + `/ingest` path, which always targets
+        `current_variant()`, doesn't need to pass one explicitly. Sources with
+        nothing to filter (everything but `tauri-docs`) accept and ignore it."""
+        ...
 
     @property
     def path(self) -> Path:
