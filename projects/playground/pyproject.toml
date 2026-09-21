@@ -1,0 +1,23 @@
+[project]
+name = "playground"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Nguyen Phuc Vinh", email = "npvinh0507@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "langchain>=1.4.2",
+    "langchain-ollama>=1.1.0",
+]
+
+[project.scripts]
+playground = "playground:main"
+prompt-chaining = "playground.prompt_chaining:main"
+routing = "playground.routing:main"
+parallelization = "playground.parallelization:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
