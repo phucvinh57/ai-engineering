@@ -87,12 +87,17 @@ def review_draft(message: str, facts: str, draft: str) -> str:
     """Rules and LLM critic are merged into one feedback message for the producer."""
     # A fresh call with the critic persona. It gets the task and the draft, not the
     # producer's history, so it is not anchored by the earlier rewrites.
-    llm_review = model.invoke(
+    chunks = []
+    for chunk in model.stream(
         [
             SystemMessage(REVIEWER_PROMPT),
             HumanMessage(f"Customer message:\n{message}\nFacts:\n{facts}\nReply:\n{draft}"),
         ]
-    ).text
+    ):
+        print(chunk.text, end="", flush=True)
+        chunks.append(chunk.text)
+    print()
+    llm_review = "".join(chunks)
     problems = rule_checks(draft)
     if not is_approved(llm_review):
         problems.append(llm_review)
@@ -110,17 +115,24 @@ def reflect(message: str, facts: str, max_iters: int = MAX_ITERS) -> ReflectionR
     ]
     result = ReflectionResult(final="", approved=False)
 
-    for _ in range(max_iters):
+    for i in range(max_iters):
         # 1. Execute: generate the first draft, or refine using the last review
         context_chars = chars_in(history)
-        draft: AIMessage = model.invoke(history)
+        print(f"\n=== Draft {i + 1} (producer history: {context_chars} chars) ===")
+        chunks = []
+        for chunk in model.stream(history):
+            print(chunk.text, end="", flush=True)
+            chunks.append(chunk.text)
+        print()
+        draft_text = "".join(chunks)
 
         # 2. Evaluate: rules plus a critic persona, merged into one review
-        review = review_draft(message, facts, draft.text)
+        print(f"\n=== Critique {i + 1} ===")
+        review = review_draft(message, facts, draft_text)
 
         approved = is_approved(review)
-        result.rounds.append(Round(draft.text, review, approved, context_chars))
-        result.final = draft.text
+        result.rounds.append(Round(draft_text, review, approved, context_chars))
+        result.final = draft_text
 
         # 3. Stop condition: approved, or the loop runs out of iterations
         if approved:
@@ -129,22 +141,17 @@ def reflect(message: str, facts: str, max_iters: int = MAX_ITERS) -> ReflectionR
 
         # 4. Refine: the draft and its review join the history, so the next
         #    round builds on the earlier attempts instead of starting over
-        history += [draft, HumanMessage(f"Review:\n{review}\n\nRewrite the reply to fix every point.")]
+        rewrite_request = HumanMessage(f"Review:\n{review}\n\nRewrite the reply to fix every point.")
+        history += [AIMessage(draft_text), rewrite_request]
 
     return result
 
 
 def main():
-    result = reflect(CUSTOMER_MESSAGE, FACTS)
-
     print("=== Customer message ===")
     print(CUSTOMER_MESSAGE)
 
-    for i, r in enumerate(result.rounds, start=1):
-        print(f"\n=== Draft {i} (producer history: {r.context_chars} chars) ===")
-        print(r.draft)
-        print(f"\n=== Critique {i} ===")
-        print(r.review)
+    result = reflect(CUSTOMER_MESSAGE, FACTS)
 
     print("\n=== Final reply ===")
     print(result.final)
