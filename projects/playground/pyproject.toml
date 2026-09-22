@@ -17,6 +17,7 @@ playground = "playground:main"
 prompt-chaining = "playground.prompt_chaining:main"
 routing = "playground.routing:main"
 parallelization = "playground.parallelization:main"
+reflection = "playground.reflection:main"
 
 [build-system]
 requires = ["uv_build>=0.12.0,<0.13.0"]
