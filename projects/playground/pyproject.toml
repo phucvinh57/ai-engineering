@@ -10,6 +10,7 @@ requires-python = ">=3.14"
 dependencies = [
     "langchain>=1.4.2",
     "langchain-ollama>=1.1.0",
+    "psutil>=7.2.2",
 ]
 
 [project.scripts]
@@ -18,6 +19,7 @@ prompt-chaining = "playground.prompt_chaining:main"
 routing = "playground.routing:main"
 parallelization = "playground.parallelization:main"
 reflection = "playground.reflection:main"
+tool-use = "playground.tool_use:main"
 
 [build-system]
 requires = ["uv_build>=0.12.0,<0.13.0"]
