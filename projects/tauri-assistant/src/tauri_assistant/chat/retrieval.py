@@ -71,9 +71,7 @@ def retrieve_with_timing(
         passages.append(Passage(text=text, metadata=hit.metadata, score=hit.score))
     t3 = time.perf_counter()
 
-    timing = RetrievalTiming(
-        embed_ms=(t1 - t0) * 1000, query_ms=(t2 - t1) * 1000, expand_ms=(t3 - t2) * 1000
-    )
+    timing = RetrievalTiming(embed_ms=(t1 - t0) * 1000, query_ms=(t2 - t1) * 1000, expand_ms=(t3 - t2) * 1000)
     return passages, timing
 
 

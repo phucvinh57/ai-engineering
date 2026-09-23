@@ -54,8 +54,10 @@ OCR-style example: LLM extracts text → LLM normalises ("one thousand and fifty
 ## Minimal code (LangChain LCEL)
 
 ```python
-extract   = ChatPromptTemplate.from_template("Extract the technical specifications from:\n\n{text_input}")
-transform = ChatPromptTemplate.from_template("Turn these specs into JSON with keys cpu, memory, storage:\n\n{specifications}")
+extract = ChatPromptTemplate.from_template("Extract the technical specifications from:\n\n{text_input}")
+transform = ChatPromptTemplate.from_template(
+    "Turn these specs into JSON with keys cpu, memory, storage:\n\n{specifications}"
+)
 
 extraction_chain = extract | llm | StrOutputParser()
 full_chain = {"specifications": extraction_chain} | transform | llm | StrOutputParser()

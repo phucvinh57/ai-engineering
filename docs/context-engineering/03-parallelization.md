@@ -38,12 +38,14 @@ Rule: find the parts of a workflow that **don't depend on each other's output** 
 - **Google ADK:** `ParallelAgent(sub_agents=[...])` runs researcher agents concurrently, each storing output in shared session state via `output_key`; a `SequentialAgent([parallel_agent, merger_agent])` then runs the merger, whose prompt interpolates `{renewable_energy_result}`, etc. Tell the merger to use *only* the provided summaries to keep it grounded.
 
 ```python
-map_chain = RunnableParallel({
-    "summary":   summarize_chain,
-    "questions": questions_chain,
-    "key_terms": terms_chain,
-    "topic":     RunnablePassthrough(),
-})
+map_chain = RunnableParallel(
+    {
+        "summary": summarize_chain,
+        "questions": questions_chain,
+        "key_terms": terms_chain,
+        "topic": RunnablePassthrough(),
+    }
+)
 full_chain = map_chain | synthesis_prompt | llm | StrOutputParser()
 ```
 

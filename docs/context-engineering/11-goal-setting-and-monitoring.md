@@ -43,7 +43,7 @@ Loop (max 5 iterations):
 for i in range(max_iterations):
     code = llm(generate_prompt(use_case, goals, previous_code, feedback))
     feedback = llm(critique_prompt(code, goals))
-    if goals_met(feedback, goals):     # LLM returns "True" / "False"
+    if goals_met(feedback, goals):  # LLM returns "True" / "False"
         break
     previous_code = code
 ```

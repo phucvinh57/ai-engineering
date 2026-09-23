@@ -64,8 +64,10 @@ def cmd_generate(args: argparse.Namespace) -> None:
     items, counts = gen.generate_dataset(baseline, quota=quota)
     merged = ds.merge_seed(items)
     ds.save(merged)
-    logger.info(f"generate: {counts}, {len(merged)} item(s) total (incl. {len(ds.SEED_ITEMS)} seed) "
-                f"written to {ds.DEFAULT_PATH}")
+    logger.info(
+        f"generate: {counts}, {len(merged)} item(s) total (incl. {len(ds.SEED_ITEMS)} seed) "
+        f"written to {ds.DEFAULT_PATH}"
+    )
 
 
 def cmd_verify(args: argparse.Namespace) -> None:

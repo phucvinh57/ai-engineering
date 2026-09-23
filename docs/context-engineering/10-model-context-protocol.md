@@ -49,11 +49,16 @@ Database access (e.g. BigQuery via MCP Toolbox), generative-media orchestration 
 
 ```python
 LlmAgent(
-  model="gemini-2.0-flash", name="filesystem_assistant_agent",
-  instruction="Help the user manage files in: " + TARGET_FOLDER_PATH,
-  tools=[MCPToolset(connection_params=StdioServerParameters(
-      command="npx",
-      args=["-y", "@modelcontextprotocol/server-filesystem", TARGET_FOLDER_PATH]))],
+    model="gemini-2.0-flash",
+    name="filesystem_assistant_agent",
+    instruction="Help the user manage files in: " + TARGET_FOLDER_PATH,
+    tools=[
+        MCPToolset(
+            connection_params=StdioServerParameters(
+                command="npx", args=["-y", "@modelcontextprotocol/server-filesystem", TARGET_FOLDER_PATH]
+            )
+        )
+    ],
 )
 ```
 (`npx` runs Node-based servers; `uvx` runs Python ones in an isolated env; use `tool_filter=[...]` to expose only some tools. Add `__init__.py` with `from . import agent` and launch with `adk web`.)
@@ -63,10 +68,12 @@ LlmAgent(
 ```python
 mcp_server = FastMCP()
 
+
 @mcp_server.tool
 def greet(name: str) -> str:
-    """Generates a personalised greeting."""   # docstring → tool description
+    """Generates a personalised greeting."""  # docstring → tool description
     return f"Hello, {name}! Nice to meet you."
+
 
 mcp_server.run(transport="http", host="127.0.0.1", port=8000)
 ```

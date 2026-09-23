@@ -110,8 +110,7 @@ SEED_ITEMS: tuple[QuestionItem, ...] = (
     QuestionItem(
         id="seed-perm-autostart-disable",
         question=(
-            "What is the permission identifier that allows disabling autostart, "
-            "for the autostart plugin?"
+            "What is the permission identifier that allows disabling autostart, for the autostart plugin?"
         ),
         source="plugin-permissions",
         kind="permission-permission",

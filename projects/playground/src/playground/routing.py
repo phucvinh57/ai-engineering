@@ -76,9 +76,7 @@ db = MockDB()
 
 def billing_context(customer_id: str) -> str:
     invoices = db.get_invoices(customer_id)
-    return "\n".join(
-        f"- {i['id']} on {i['date']}: ${i['amount']:.2f} ({i['status']})" for i in invoices
-    )
+    return "\n".join(f"- {i['id']} on {i['date']}: ${i['amount']:.2f} ({i['status']})" for i in invoices)
 
 
 def account_context(customer_id: str) -> str:
@@ -90,9 +88,7 @@ def account_context(customer_id: str) -> str:
 
 def technical_context(customer_id: str) -> str:
     devices = db.get_devices(customer_id)
-    return "\n".join(
-        f"- {d['os']}, app {d['app_version']}, last error: {d['last_error']}" for d in devices
-    )
+    return "\n".join(f"- {d['os']}, app {d['app_version']}, last error: {d['last_error']}" for d in devices)
 
 
 # Only query what the route needs; routes without an entry skip the database.

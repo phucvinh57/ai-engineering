@@ -88,7 +88,7 @@ model = model.bind_tools(TOOLS)
 def run_agent(question: str, max_steps: int = MAX_STEPS) -> str:
     history: list[BaseMessage] = [SystemMessage(AGENT_PROMPT), HumanMessage(question)]
 
-    for _step in range(max_steps):
+    for _ in range(max_steps):
         # 2 & 3. LLM decides whether it needs a tool and, if so, generates
         #        a structured call (name + typed args) instead of plain text.
         response = model.invoke(history)

@@ -43,11 +43,13 @@ Agents in the real world will meet tool failures, network problems, bad data and
 A `SequentialAgent` of three agents gives a layered recovery:
 
 ```python
-robust_location_agent = SequentialAgent(sub_agents=[
-    primary_handler,   # calls get_precise_location_info; on failure sets state["primary_location_failed"]=True
-    fallback_handler,  # if the flag is True: extract the city and call get_general_area_info
-    response_agent,    # presents state["location_result"], or apologises if missing
-])
+robust_location_agent = SequentialAgent(
+    sub_agents=[
+        primary_handler,  # calls get_precise_location_info; on failure sets state["primary_location_failed"]=True
+        fallback_handler,  # if the flag is True: extract the city and call get_general_area_info
+        response_agent,  # presents state["location_result"], or apologises if missing
+    ]
+)
 ```
 
 State carries the failure signal between agents, so the fallback runs *only* when needed and the final agent always produces a sane answer.

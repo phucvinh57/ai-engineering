@@ -20,6 +20,7 @@ routing = "playground.routing:main"
 parallelization = "playground.parallelization:main"
 reflection = "playground.reflection:main"
 tool-use = "playground.tool_use:main"
+planning = "playground.planning:main"
 
 [build-system]
 requires = ["uv_build>=0.12.0,<0.13.0"]

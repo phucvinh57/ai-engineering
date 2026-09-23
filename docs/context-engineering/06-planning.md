@@ -19,6 +19,17 @@ Instead of just reacting, the agent first **works out a sequence of steps** from
 - **Procedural automation** – onboarding an employee: create accounts → assign training → coordinate departments, respecting dependencies.
 - **Robotics / navigation** – find a path from A to B while optimising time/energy and avoiding obstacles.
 - **Research and report writing** – phases: gather → summarise → structure → refine.
+
+  > *Example — "Write a report comparing the top 3 vector databases for a RAG pipeline."*
+  > 1. **Plan:** the agent first emits a numbered plan: (1) identify candidate DBs, (2) gather data on cost/latency/scaling/integrations for each, (3) run small benchmark queries if tooling allows, (4) draft comparison table, (5) write summary + recommendation, (6) cite sources.
+  > 2. **Gather:** for each candidate, issue targeted searches ("Pinecone pricing 2026", "Weaviate vs Qdrant benchmark"), pulling structured facts rather than raw pages.
+  > 3. **Gap check / re-plan:** if pricing data is missing for one DB, the agent adds a step to search vendor docs directly instead of failing silently.
+  > 4. **Structure:** organise findings into a table + narrative outline before drafting prose.
+  > 5. **Refine:** pass the draft through a **reflection** step (Ch. 4) to check claims are cited and the recommendation follows from the evidence.
+  > This mirrors the Gemini Deep Research / OpenAI Deep Research flows below — the plan is what turns "write a report" from a single LLM call into a controllable, inspectable multi-step process.
+  >
+  > Runnable implementation: [`projects/playground/src/playground/planning.py`](../../projects/playground/src/playground/planning.py) (`uv run planning`) — plan → gather → gap-check/re-plan → structure → refine over a small mock knowledge base, so it runs offline against a local Ollama model.
+
 - **Customer support** – diagnose → apply fix → escalate.
 
 ## Implementations in the book

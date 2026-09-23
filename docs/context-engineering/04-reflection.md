@@ -45,10 +45,11 @@ Unlike chaining (output flows forward) or routing (pick a path), reflection loop
 ```python
 history = [HumanMessage(task)]
 for i in range(MAX_ITERS):
-    code = llm.invoke(history)                    # 1. generate / refine
-    critique = llm.invoke([SystemMessage(REVIEWER_PROMPT),
-                           HumanMessage(f"Task:{task}\nCode:{code}")])  # 2. reflect
-    if "CODE_IS_PERFECT" in critique:             # stop condition
+    code = llm.invoke(history)  # 1. generate / refine
+    critique = llm.invoke(
+        [SystemMessage(REVIEWER_PROMPT), HumanMessage(f"Task:{task}\nCode:{code}")]
+    )  # 2. reflect
+    if "CODE_IS_PERFECT" in critique:  # stop condition
         break
     history += [code, HumanMessage(f"Critique:{critique}\nRefine the code.")]
 ```

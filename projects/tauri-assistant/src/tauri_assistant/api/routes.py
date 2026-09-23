@@ -93,21 +93,24 @@ def _chat_events(prepared: PreparedTurn, root: Any) -> Iterator[str]:
     `with` block spanning a `yield` (see telemetry.py's module docstring for
     why Starlette's sync-generator streaming makes that unsafe).
     """
-    yield json.dumps(
-        {
-            "type": "sources",
-            "trace_id": root.trace_id,
-            "sources": [
-                {
-                    "document_id": p.metadata.get("document_id", ""),
-                    "heading_path": p.metadata.get("heading_path", ""),
-                    "url": p.metadata.get("url"),
-                    "score": p.score,
-                }
-                for p in prepared.passages
-            ],
-        }
-    ) + "\n"
+    yield (
+        json.dumps(
+            {
+                "type": "sources",
+                "trace_id": root.trace_id,
+                "sources": [
+                    {
+                        "document_id": p.metadata.get("document_id", ""),
+                        "heading_path": p.metadata.get("heading_path", ""),
+                        "url": p.metadata.get("url"),
+                        "score": p.score,
+                    }
+                    for p in prepared.passages
+                ],
+            }
+        )
+        + "\n"
+    )
 
     usage = None
     try:

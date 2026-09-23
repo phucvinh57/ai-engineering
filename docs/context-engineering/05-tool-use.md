@@ -45,6 +45,7 @@ def search_information(query: str) -> str:
     """Provides factual information on a topic. Use for 'capital of France' etc."""
     ...
 
+
 agent = create_tool_calling_agent(llm, [search_information], prompt)
 executor = AgentExecutor(agent=agent, tools=[search_information])
 ```

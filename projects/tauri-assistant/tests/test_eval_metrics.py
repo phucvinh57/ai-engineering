@@ -13,9 +13,7 @@ def make_passage(document_id: str, heading_path: str, score: float = 0.5) -> Pas
     )
 
 
-def make_item(
-    expected_document_ids: tuple[str, ...] = (), expected_heading_path: str = ""
-) -> QuestionItem:
+def make_item(expected_document_ids: tuple[str, ...] = (), expected_heading_path: str = "") -> QuestionItem:
     return QuestionItem(
         id="q1",
         question="how do I foo?",

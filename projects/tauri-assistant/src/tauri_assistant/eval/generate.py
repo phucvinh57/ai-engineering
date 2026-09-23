@@ -157,7 +157,7 @@ def judge_answerability(question: str, client: OpenAI, model: str) -> JudgeVerdi
     try:
         data = json.loads(content)
         return JudgeVerdict(keep=bool(data["keep"]), reason=str(data.get("reason", "")))
-    except (json.JSONDecodeError, KeyError, ValueError):
+    except json.JSONDecodeError, KeyError, ValueError:
         pass
 
     # Small local judges can truncate mid-JSON -- fall back to a regex
